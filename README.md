@@ -86,6 +86,11 @@ repo and never logged. Every provider row in Settings has a cheap "Test
 connection" call so you can confirm a key works before running a real
 forecast.
 
+The main page also shows a status chip for every provider (connected / no
+key / failed, with the error) right at the top, and re-checks every
+configured provider automatically on page load — so you can tell at a
+glance which ones are actually ready without opening Settings.
+
 The active run (question, background, every agent's status/result, stats,
 and any synthesis passes) is also persisted to `localStorage`, separately
 from settings, and restored automatically on page reload — so refreshing
