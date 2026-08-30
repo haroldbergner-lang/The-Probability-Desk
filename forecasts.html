@@ -1,0 +1,403 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>The Probability Desk — Log</title>
+<link rel="icon" href="data:,">
+<style>
+  :root{
+    --bg:#0a0d0a; --bg-alt:#0e130f; --panel:#10150f; --border:#233123; --line:#2c3d2c;
+    --text:#c9d9c9; --text-dim:#7d9280; --green:#3ddc84; --green-dim:#1f8f4c;
+    --amber:#ffb454; --amber-dim:#9c7433; --red:#ff6b6b;
+    --font: ui-monospace, "SFMono-Regular", Menlo, Consolas, "Liberation Mono", monospace;
+  }
+  *{box-sizing:border-box;}
+  [hidden]{display:none !important;}
+  html,body{margin:0;padding:0;}
+  body{background:var(--bg);color:var(--text);font-family:var(--font);font-size:13px;line-height:1.5;padding-bottom:60px;}
+  a{color:var(--green);}
+  header{display:flex;justify-content:space-between;align-items:center;padding:14px 20px;border-bottom:1px solid var(--border);background:var(--bg-alt);position:sticky;top:0;z-index:10;flex-wrap:wrap;gap:10px;}
+  header h1{font-size:15px;margin:0;color:var(--green);letter-spacing:0.5px;}
+  header h1 .cursor{animation:blink 1.1s steps(2) infinite;}
+  @keyframes blink{50%{opacity:0;}}
+  nav{display:flex;gap:14px;align-items:center;font-size:12px;}
+  nav a{text-decoration:none;color:var(--text-dim);border:1px solid transparent;padding:4px 8px;}
+  nav a:hover, nav a.active{color:var(--green);border-color:var(--border);}
+  button, .btn{font-family:var(--font);background:var(--panel);color:var(--green);border:1px solid var(--green-dim);padding:6px 10px;cursor:pointer;font-size:11.5px;border-radius:2px;}
+  button:hover:not(:disabled){background:#152018;border-color:var(--green);}
+  button:disabled{opacity:0.4;cursor:not-allowed;}
+  button.secondary{color:var(--text-dim);border-color:var(--border);}
+  button.yes{color:var(--green);}
+  button.no{color:var(--red);border-color:#5c2a2a;}
+  main{max-width:1200px;margin:0 auto;padding:18px 16px 40px;}
+  .card{background:var(--panel);border:1px solid var(--border);padding:16px;margin-bottom:18px;border-radius:3px;}
+  .card h2{margin:0 0 12px;font-size:13px;color:var(--amber);text-transform:uppercase;letter-spacing:1px;}
+  .stats-strip{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:6px;}
+  .stat-box{background:#0c100c;border:1px solid var(--border);padding:8px 14px;text-align:center;border-radius:2px;flex:1;min-width:120px;}
+  .stat-box .v{color:var(--green);font-size:16px;font-weight:bold;}
+  .stat-box .l{color:var(--text-dim);font-size:9.5px;text-transform:uppercase;}
+  table{width:100%;border-collapse:collapse;font-size:12px;}
+  th, td{border-bottom:1px solid var(--border);padding:8px 6px;text-align:left;vertical-align:top;}
+  th{color:var(--amber);cursor:pointer;user-select:none;white-space:nowrap;font-size:11px;text-transform:uppercase;letter-spacing:0.5px;}
+  th:hover{color:var(--green);}
+  th .arrow{opacity:0.6;font-size:9px;}
+  tr:hover td{background:#0e130f;}
+  td.q{max-width:340px;}
+  .tablewrap{overflow-x:auto;}
+  .status-pill{font-size:10px;padding:2px 7px;border-radius:10px;border:1px solid;text-transform:uppercase;letter-spacing:0.5px;white-space:nowrap;}
+  .status-pill.pending{color:var(--text-dim);border-color:var(--border);}
+  .status-pill.yes{color:var(--green);border-color:var(--green-dim);}
+  .status-pill.no{color:var(--red);border-color:#5c2a2a;}
+  .status-pill.overdue{color:var(--amber);border-color:var(--amber-dim);}
+  .actions-cell{display:flex;gap:4px;}
+  .modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,0.7);display:flex;align-items:flex-start;justify-content:center;padding:30px 14px;z-index:100;overflow:auto;}
+  .modal{background:var(--panel);border:1px solid var(--border);max-width:520px;width:100%;padding:20px;border-radius:4px;}
+  .modal h2{margin-top:0;color:var(--amber);font-size:14px;}
+  .close-x{float:right;background:none;border:none;color:var(--text-dim);font-size:16px;cursor:pointer;padding:0;}
+  label{display:block;font-size:11px;color:var(--text-dim);margin-bottom:4px;margin-top:10px;text-transform:uppercase;letter-spacing:0.5px;}
+  label:first-child{margin-top:0;}
+  input[type=text], input[type=password]{width:100%;background:#0c100c;color:var(--text);border:1px solid var(--border);padding:8px;font-family:var(--font);font-size:12.5px;border-radius:2px;}
+  .row{display:flex;gap:12px;flex-wrap:wrap;}
+  .row > div{flex:1;min-width:140px;}
+  .hint{font-size:11px;color:var(--text-dim);margin-top:8px;}
+  .toast{position:fixed;bottom:16px;right:16px;background:var(--panel);border:1px solid var(--green-dim);color:var(--text);padding:10px 14px;border-radius:3px;font-size:12px;max-width:320px;z-index:200;}
+  .toast.error{border-color:#5c2a2a;color:var(--red);}
+  footer{max-width:1200px;margin:0 auto;padding:10px 16px;color:var(--text-dim);font-size:11px;}
+  .empty{color:var(--text-dim);padding:20px 0;text-align:center;}
+</style>
+</head>
+<body>
+<header>
+  <h1>&gt; THE PROBABILITY DESK<span class="cursor">_</span></h1>
+  <nav>
+    <a href="index.html">Forecast</a>
+    <a href="forecasts.html" class="active">Log</a>
+    <button id="openSettings" class="secondary" type="button">⚙ Settings</button>
+    <button id="btnRefresh" class="secondary" type="button">↻ Refresh</button>
+  </nav>
+</header>
+<main>
+  <section class="card">
+    <h2>Track Record</h2>
+    <div class="stats-strip" id="statsStrip">
+      <div class="stat-box"><div class="v" id="statTotal">—</div><div class="l">forecasts</div></div>
+      <div class="stat-box"><div class="v" id="statResolved">—</div><div class="l">resolved</div></div>
+      <div class="stat-box"><div class="v" id="statBrier">—</div><div class="l">brier score (lower is better)</div></div>
+    </div>
+    <div class="hint" id="loadStatus">Loading…</div>
+  </section>
+
+  <section class="card">
+    <div class="tablewrap">
+      <table id="logTable">
+        <thead>
+          <tr>
+            <th data-key="date">Date</th>
+            <th data-key="question">Question</th>
+            <th data-key="finalProb">Final Prob</th>
+            <th data-key="marketPrice">Market Price</th>
+            <th data-key="deadline">Deadline</th>
+            <th data-key="status">Status</th>
+            <th data-key="host">Host</th>
+            <th>Resolve</th>
+          </tr>
+        </thead>
+        <tbody id="logBody"></tbody>
+      </table>
+      <div class="empty" id="emptyMsg" hidden>No forecasts found in forecasts/ yet.</div>
+    </div>
+  </section>
+</main>
+<footer>Reads forecasts/*.json from this repo via the GitHub API. Marking a resolution writes back to the same file.</footer>
+
+<div class="modal-overlay" id="settingsModal" hidden>
+  <div class="modal">
+    <button class="close-x" id="closeSettings" type="button">✕</button>
+    <h2>GitHub Settings</h2>
+    <p class="hint">Shared with the forecast page — stored in this browser's localStorage only.</p>
+    <label for="sGhPat">Fine-grained PAT (repo contents read/write)</label>
+    <input type="password" id="sGhPat" placeholder="github_pat_...">
+    <div class="row">
+      <div><label for="sGhOwner">Owner</label><input type="text" id="sGhOwner" placeholder="username"></div>
+      <div><label for="sGhRepo">Repo</label><input type="text" id="sGhRepo" placeholder="repo-name"></div>
+      <div><label for="sGhBranch">Branch</label><input type="text" id="sGhBranch" placeholder="main"></div>
+    </div>
+    <div class="hint" id="ghStatus"></div>
+    <div style="margin-top:16px;display:flex;gap:10px;">
+      <button id="btnTestGithub" class="secondary" type="button">Test connection</button>
+      <button id="btnSaveSettings" type="button">Save</button>
+    </div>
+  </div>
+</div>
+
+<script>
+(function(){
+"use strict";
+var STORAGE_KEY = "pfd_settings_v1";
+
+function $(id){ return document.getElementById(id); }
+function esc(s){
+  return String(s === undefined || s === null ? "" : s).replace(/[&<>"']/g, function(c){
+    return {"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;"}[c];
+  });
+}
+function b64EncodeUnicode(str){
+  return btoa(encodeURIComponent(str).replace(/%([0-9A-F]{2})/g, function(_, p){ return String.fromCharCode("0x" + p); }));
+}
+async function safeText(res){ try{ return (await res.text()).slice(0,600); } catch(e){ return ""; } }
+function toast(msg, isError){
+  var t = document.createElement("div");
+  t.className = "toast" + (isError ? " error" : "");
+  t.textContent = msg;
+  document.body.appendChild(t);
+  setTimeout(function(){ t.remove(); }, 5000);
+}
+window.addEventListener("unhandledrejection", function(e){
+  console.error("Unhandled promise rejection:", e.reason);
+  toast("Unexpected error: " + (e.reason && e.reason.message ? e.reason.message : String(e.reason)), true);
+  e.preventDefault();
+});
+
+function defaultSettings(){
+  return {
+    host:"anthropic", keys:{anthropic:"",openai:"",gemini:"",xai:"",openrouter:""},
+    models:{anthropic:"",openai:"",gemini:"",xai:"",openrouter:""},
+    openrouterWebPlugin:true, xaiFallbackModel:"",
+    github:{pat:"",owner:"",repo:"",branch:"main"}
+  };
+}
+function loadSettings(){
+  try{
+    var raw = localStorage.getItem(STORAGE_KEY);
+    if (!raw) return defaultSettings();
+    var parsed = JSON.parse(raw);
+    var d = defaultSettings();
+    return Object.assign({}, d, parsed, {github: Object.assign({}, d.github, parsed.github || {})});
+  } catch(e){ return defaultSettings(); }
+}
+function saveSettingsObj(s){ try{ localStorage.setItem(STORAGE_KEY, JSON.stringify(s)); } catch(e){ console.error(e); } }
+
+var settings = loadSettings();
+var records = []; // {path, sha, data}
+var sortKey = "date", sortDir = -1;
+
+function ghHeaders(){
+  var h = {"Accept":"application/vnd.github+json", "X-GitHub-Api-Version":"2022-11-28"};
+  if (settings.github.pat) h["Authorization"] = "Bearer " + settings.github.pat;
+  return h;
+}
+
+async function loadForecasts(){
+  var owner = settings.github.owner, repo = settings.github.repo, branch = settings.github.branch || "main";
+  var statusEl = $("loadStatus");
+  if (!owner || !repo){
+    statusEl.textContent = "Configure GitHub owner/repo in Settings to load the log.";
+    renderTable();
+    return;
+  }
+  statusEl.textContent = "Loading forecasts/ …";
+  try{
+    var listRes = await fetch("https://api.github.com/repos/" + owner + "/" + repo + "/contents/forecasts?ref=" + encodeURIComponent(branch), {headers: ghHeaders()});
+    if (listRes.status === 404){
+      records = [];
+      statusEl.textContent = "forecasts/ directory not found yet — save a forecast first.";
+      renderTable();
+      return;
+    }
+    if (!listRes.ok) throw new Error("GitHub " + listRes.status + ": " + await safeText(listRes));
+    var items = await listRes.json();
+    var files = (Array.isArray(items) ? items : []).filter(function(it){ return it.type === "file" && /\.json$/i.test(it.name); });
+    var loaded = [];
+    for (var i = 0; i < files.length; i++){
+      var it = files[i];
+      try{
+        var fileRes = await fetch(it.download_url, {headers: settings.github.pat ? {"Authorization":"Bearer " + settings.github.pat} : {}});
+        if (!fileRes.ok) continue;
+        var data = await fileRes.json();
+        loaded.push({path: it.path, sha: it.sha, data: data});
+      } catch(e){ console.error("Failed to load " + it.path, e); }
+    }
+    records = loaded;
+    statusEl.textContent = "Loaded " + records.length + " forecast(s).";
+    renderTable();
+  } catch(err){
+    statusEl.textContent = "Failed to load: " + (err.message || err);
+    renderTable();
+  }
+}
+
+function finalProbOf(data){
+  var passes = data.synthesisPasses || [];
+  for (var i = passes.length - 1; i >= 0; i--){
+    if (passes[i].parsed && typeof passes[i].parsed.final_probability === "number") return passes[i].parsed.final_probability;
+  }
+  return null;
+}
+function rowFrom(rec){
+  var d = rec.data;
+  var finalProb = finalProbOf(d);
+  var resolved = d.resolution && d.resolution.outcome;
+  var overdue = !resolved && d.deadline && d.deadline < new Date().toISOString().slice(0,10);
+  return {
+    path: rec.path,
+    sha: rec.sha,
+    date: (d.createdAt || "").slice(0,10),
+    question: d.question || "",
+    finalProb: finalProb,
+    marketPrice: d.marketPriceAtForecast || null,
+    deadline: d.deadline || "",
+    status: resolved ? resolved : (overdue ? "overdue" : "pending"),
+    host: d.host || "",
+    raw: d
+  };
+}
+function computeBrier(rows){
+  var resolved = rows.filter(function(r){ return (r.status === "YES" || r.status === "yes" || r.status === "NO" || r.status === "no") && typeof r.finalProb === "number"; });
+  if (!resolved.length) return {n:0, score:null};
+  var sum = 0;
+  resolved.forEach(function(r){
+    var outcome = /yes/i.test(r.status) ? 1 : 0;
+    sum += Math.pow(r.finalProb - outcome, 2);
+  });
+  return {n: resolved.length, score: sum / resolved.length};
+}
+function sortRows(rows){
+  var dir = sortDir;
+  return rows.slice().sort(function(a,b){
+    var av = a[sortKey], bv = b[sortKey];
+    if (av === null || av === undefined) av = "";
+    if (bv === null || bv === undefined) bv = "";
+    if (av < bv) return -1 * dir;
+    if (av > bv) return 1 * dir;
+    return 0;
+  });
+}
+function renderTable(){
+  var rows = records.map(rowFrom);
+  $("statTotal").textContent = rows.length;
+  var resolvedRows = rows.filter(function(r){ return /^(yes|no)$/i.test(r.status); });
+  $("statResolved").textContent = resolvedRows.length;
+  var brier = computeBrier(rows);
+  $("statBrier").textContent = brier.score === null ? "—" : brier.score.toFixed(4) + " (n=" + brier.n + ")";
+
+  var sorted = sortRows(rows);
+  var body = $("logBody");
+  $("emptyMsg").hidden = sorted.length > 0;
+  body.innerHTML = sorted.map(function(r, idx){
+    var statusClass = /^yes$/i.test(r.status) ? "yes" : /^no$/i.test(r.status) ? "no" : r.status === "overdue" ? "overdue" : "pending";
+    var canResolve = !/^(yes|no)$/i.test(r.status);
+    return "" +
+      "<tr>" +
+      "<td>" + esc(r.date) + "</td>" +
+      '<td class="q">' + esc(r.question) + "</td>" +
+      "<td>" + (typeof r.finalProb === "number" ? (r.finalProb*100).toFixed(1) + "%" : "—") + "</td>" +
+      "<td>" + (r.marketPrice ? esc(r.marketPrice) : "—") + "</td>" +
+      "<td>" + esc(r.deadline) + "</td>" +
+      '<td><span class="status-pill ' + statusClass + '">' + esc(r.status) + "</span></td>" +
+      "<td>" + esc(r.host) + "</td>" +
+      '<td class="actions-cell">' +
+      (canResolve ?
+        '<button class="yes secondary" data-resolve="yes" data-idx="' + idx + '" type="button">YES</button>' +
+        '<button class="no secondary" data-resolve="no" data-idx="' + idx + '" type="button">NO</button>'
+        : '<span class="hint">resolved</span>') +
+      "</td>" +
+      "</tr>";
+  }).join("");
+
+  body.querySelectorAll("[data-resolve]").forEach(function(btn){
+    btn.addEventListener("click", function(){
+      var idx = Number(btn.getAttribute("data-idx"));
+      var outcome = btn.getAttribute("data-resolve") === "yes" ? "YES" : "NO";
+      resolveForecast(sorted[idx], outcome).catch(function(e){ console.error(e); toast("Resolve failed: " + (e.message||e), true); });
+    });
+  });
+}
+async function resolveForecast(row, outcome){
+  if (!settings.github.pat){ toast("Configure a GitHub PAT with write access in Settings to record resolutions.", true); return; }
+  var rec = records.find(function(r){ return r.path === row.path; });
+  if (!rec) return;
+  var updated = Object.assign({}, rec.data, {resolution: {outcome: outcome, resolvedAt: new Date().toISOString()}});
+  try{
+    var res = await fetch("https://api.github.com/repos/" + settings.github.owner + "/" + settings.github.repo + "/contents/" + rec.path.split("/").map(encodeURIComponent).join("/"), {
+      method:"PUT",
+      headers: Object.assign({"content-type":"application/json"}, ghHeaders()),
+      body: JSON.stringify({
+        message: "Resolve forecast: " + (updated.question || rec.path) + " -> " + outcome,
+        content: b64EncodeUnicode(JSON.stringify(updated, null, 2)),
+        sha: rec.sha,
+        branch: settings.github.branch || "main"
+      })
+    });
+    if (!res.ok) throw new Error("GitHub " + res.status + ": " + await safeText(res));
+    var body = await res.json();
+    rec.data = updated;
+    if (body.content && body.content.sha) rec.sha = body.content.sha;
+    renderTable();
+    toast("Marked " + outcome + ".", false);
+  } catch(err){
+    toast("Failed to save resolution: " + (err.message || err), true);
+  }
+}
+
+function wireSortHeaders(){
+  document.querySelectorAll("#logTable th[data-key]").forEach(function(th){
+    th.addEventListener("click", function(){
+      var key = th.getAttribute("data-key");
+      if (sortKey === key){ sortDir *= -1; } else { sortKey = key; sortDir = 1; }
+      renderTable();
+    });
+  });
+}
+
+function openSettingsModal(){
+  $("sGhPat").value = settings.github.pat || "";
+  $("sGhOwner").value = settings.github.owner || "";
+  $("sGhRepo").value = settings.github.repo || "";
+  $("sGhBranch").value = settings.github.branch || "main";
+  $("ghStatus").textContent = "";
+  $("settingsModal").hidden = false;
+}
+function closeSettingsModal(){ $("settingsModal").hidden = true; }
+async function testGithub(){
+  var pat = $("sGhPat").value, owner = $("sGhOwner").value, repo = $("sGhRepo").value;
+  var status = $("ghStatus");
+  if (!owner || !repo){ status.textContent = "Fill in owner and repo first."; return; }
+  status.textContent = "testing…";
+  try{
+    var headers = {"Accept":"application/vnd.github+json", "X-GitHub-Api-Version":"2022-11-28"};
+    if (pat) headers["Authorization"] = "Bearer " + pat;
+    var r = await fetch("https://api.github.com/repos/" + owner + "/" + repo, {headers: headers});
+    if (!r.ok) throw new Error(String(r.status) + ": " + await safeText(r));
+    status.textContent = "connected ✓";
+  } catch(err){
+    status.textContent = "failed: " + (err.message || err);
+  }
+}
+function persistSettings(){
+  settings.github = {
+    pat: $("sGhPat").value.trim(),
+    owner: $("sGhOwner").value.trim(),
+    repo: $("sGhRepo").value.trim(),
+    branch: $("sGhBranch").value.trim() || "main"
+  };
+  saveSettingsObj(settings);
+  closeSettingsModal();
+  loadForecasts();
+}
+
+document.addEventListener("DOMContentLoaded", function(){
+  wireSortHeaders();
+  $("openSettings").addEventListener("click", openSettingsModal);
+  $("closeSettings").addEventListener("click", closeSettingsModal);
+  $("btnSaveSettings").addEventListener("click", persistSettings);
+  $("btnTestGithub").addEventListener("click", function(){ testGithub().catch(function(e){ console.error(e); }); });
+  $("btnRefresh").addEventListener("click", function(){ loadForecasts(); });
+  $("settingsModal").addEventListener("click", function(e){ if (e.target === $("settingsModal")) closeSettingsModal(); });
+  loadForecasts();
+});
+
+})();
+</script>
+</body>
+</html>
