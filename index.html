@@ -167,26 +167,22 @@
 </header>
 <main>
 
-  <p class="intro">Structure any question with a genuinely uncertain, resolvable outcome — a decision, an event, a personal or public question, not just a market — into a clean forecasting problem. One standardized prompt goes to four independent AI models in parallel; a fifth host synthesizes their answers into a single calibrated estimate.</p>
+  <p class="intro">Ask any question with a genuinely uncertain outcome — big or small, personal or public. One standardized prompt goes to four independent AI models in parallel; a fifth host synthesizes their answers into a single probability.</p>
 
   <section class="card">
-    <h2>1. Define the Scenario</h2>
-    <label for="fQuestion">Question / event</label>
-    <input type="text" id="fQuestion" placeholder="What uncertain event are you forecasting?">
-    <label for="fCriteria">Resolution criteria (how you'll know the outcome, verbatim)</label>
-    <textarea id="fCriteria" placeholder="This resolves YES if..."></textarea>
-    <div class="row">
-      <div>
-        <label for="fDeadline">Timing of forecast (deadline / resolution date)</label>
-        <input type="date" id="fDeadline">
-      </div>
-      <div>
-        <label for="fReference">Reference estimate (optional)</label>
-        <input type="text" id="fReference" placeholder="e.g. a poll number, base rate, or your own gut estimate">
-      </div>
-    </div>
-    <label for="fContext">Scenario background / context (optional)</label>
-    <textarea id="fContext" placeholder="Relevant background, timeline, links..."></textarea>
+    <h2>1. Ask Your Question</h2>
+    <label for="hostSelect">Host (synthesizes the panel — the other 4 providers become the panel)</label>
+    <select id="hostSelect">
+      <option value="anthropic">Anthropic (Claude)</option>
+      <option value="openai">OpenAI</option>
+      <option value="gemini">Google Gemini</option>
+      <option value="xai">xAI (Grok)</option>
+      <option value="openrouter">OpenRouter</option>
+    </select>
+    <label for="fQuestion">Question</label>
+    <input type="text" id="fQuestion" placeholder="e.g. Will I be married by 30? Will she text me back?">
+    <label for="fContext">Background (optional)</label>
+    <textarea id="fContext" placeholder="Any context that might matter..."></textarea>
     <div class="actions">
       <button id="btnAssemble" type="button">Assemble Prompt</button>
       <button id="btnClearForm" class="secondary" type="button">Clear Form</button>
@@ -241,14 +237,7 @@
     <button class="close-x" id="closeSettings" type="button">✕</button>
     <h2>Settings</h2>
 
-    <label for="sHost">Host provider (the other 4 automatically become the panel)</label>
-    <select id="sHost">
-      <option value="anthropic">Anthropic (Claude)</option>
-      <option value="openai">OpenAI</option>
-      <option value="gemini">Google Gemini</option>
-      <option value="xai">xAI (Grok)</option>
-      <option value="openrouter">OpenRouter</option>
-    </select>
+    <p class="hint" style="margin-top:0;">Host provider is chosen on the main page — this covers API keys, models, and GitHub.</p>
 
     <div id="providerRows"></div>
 
@@ -390,10 +379,7 @@ function saveSettings(){
 function readFormData(){
   return {
     question: $("fQuestion").value.trim(),
-    criteria: $("fCriteria").value.trim(),
-    deadline: $("fDeadline").value,
-    context: $("fContext").value.trim(),
-    reference: $("fReference").value.trim()
+    context: $("fContext").value.trim()
   };
 }
 function buildPrompt(f){
@@ -405,22 +391,13 @@ function buildPrompt(f){
   lines.push("");
   lines.push("QUESTION:");
   lines.push(f.question);
-  lines.push("");
-  lines.push("RESOLUTION CRITERIA (verbatim):");
-  lines.push(f.criteria);
-  lines.push("");
-  lines.push("DEADLINE: " + f.deadline);
   if (f.context){
     lines.push("");
-    lines.push("CONTEXT / TIMELINE NOTES:");
+    lines.push("BACKGROUND:");
     lines.push(f.context);
   }
-  if (f.reference){
-    lines.push("");
-    lines.push("REFERENCE ESTIMATE (if provided, e.g. a poll number, base rate, or prior estimate): " + f.reference);
-  }
   lines.push("");
-  lines.push("Research current information where relevant to this question before answering. Do not rely solely on prior training knowledge if the topic is time-sensitive or could have changed.");
+  lines.push("Estimate the probability that the answer to this question is yes, based only on the information provided and general reasoning. Research current information where relevant before answering — do not rely solely on prior training knowledge if the topic is time-sensitive or could have changed.");
   lines.push("");
   lines.push("Respond with ONLY a single JSON object inside one fenced code block. No prose outside the code block. The JSON object must have exactly these keys:");
   lines.push("{");
@@ -632,6 +609,8 @@ function ensureAgentState(provider){
 function renderPanelSummary(){
   $("hostLabel").textContent = PROVIDER_LABEL[settings.host];
   $("panelLabel").textContent = panelFor(settings.host).map(function(p){ return PROVIDER_LABEL[p]; }).join(", ");
+  var hostSelect = $("hostSelect");
+  if (hostSelect && hostSelect.value !== settings.host) hostSelect.value = settings.host;
 }
 function renderPanelLayout(){
   renderPanelSummary();
@@ -788,11 +767,11 @@ function buildSynthesisPrompt(f, agents, stats){
   lines.push("");
   lines.push("QUESTION:");
   lines.push(f.question);
-  lines.push("");
-  lines.push("RESOLUTION CRITERIA:");
-  lines.push(f.criteria);
-  lines.push("");
-  lines.push("DEADLINE: " + f.deadline);
+  if (f.context){
+    lines.push("");
+    lines.push("BACKGROUND:");
+    lines.push(f.context);
+  }
   lines.push("");
   lines.push("PANEL FORECASTS:");
   agents.forEach(function(a){
@@ -933,10 +912,7 @@ async function saveForecast(){
   });
   var record = {
     question: currentRun.formData.question,
-    criteria: currentRun.formData.criteria,
-    deadline: currentRun.formData.deadline,
     context: currentRun.formData.context,
-    referenceEstimate: currentRun.formData.reference || null,
     createdAt: currentRun.createdAt,
     savedAt: new Date().toISOString(),
     host: settings.host,
@@ -1058,7 +1034,6 @@ async function testGithub(){
   }
 }
 function openSettingsModal(){
-  $("sHost").value = settings.host;
   renderProviderRows();
   $("sOpenRouterWeb").checked = !!settings.openrouterWebPlugin;
   $("sXaiFallback").value = settings.xaiFallbackModel || "";
@@ -1071,7 +1046,6 @@ function openSettingsModal(){
 }
 function closeSettingsModal(){ $("settingsModal").hidden = true; }
 function persistSettingsFromModal(){
-  var newHost = $("sHost").value;
   PROVIDERS.forEach(function(p){
     settings.keys[p] = document.querySelector('[data-key="' + p + '"]').value.trim();
     settings.models[p] = document.querySelector('[data-model="' + p + '"]').value.trim();
@@ -1086,24 +1060,14 @@ function persistSettingsFromModal(){
   };
   saveSettings();
   closeSettingsModal();
-  var hostChanged = newHost !== settings.host;
-  if (hostChanged){
-    onHostChange(newHost);
-  } else {
-    settings.host = newHost;
-    saveSettings();
-    renderPanelLayout();
-    refreshStats();
-    refreshSynthesisAvailability();
-  }
   toast("Settings saved.", false);
 }
 
 /* ---------- top-level UI wiring ---------- */
 function onAssemble(){
   var f = readFormData();
-  if (!f.question || !f.criteria || !f.deadline){
-    toast("Question, resolution criteria and deadline are required.", true);
+  if (!f.question){
+    toast("A question is required.", true);
     return;
   }
   currentRun = {formData:f, prompt: buildPrompt(f), createdAt: new Date().toISOString()};
@@ -1119,7 +1083,7 @@ function onAssemble(){
   refreshSynthesisAvailability();
 }
 function onClearForm(){
-  ["fQuestion","fCriteria","fDeadline","fContext","fReference"].forEach(function(id){ $(id).value = ""; });
+  ["fQuestion","fContext"].forEach(function(id){ $(id).value = ""; });
 }
 async function onCopyPrompt(){
   if (!currentRun) return;
@@ -1133,6 +1097,7 @@ async function onCopyPrompt(){
 
 document.addEventListener("DOMContentLoaded", function(){
   renderPanelSummary();
+  $("hostSelect").addEventListener("change", function(e){ onHostChange(e.target.value).catch(function(err){ console.error(err); }); });
   $("btnAssemble").addEventListener("click", onAssemble);
   $("btnClearForm").addEventListener("click", onClearForm);
   $("btnCopyPrompt").addEventListener("click", onCopyPrompt);

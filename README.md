@@ -1,13 +1,14 @@
 # The Probability Desk
 
 A multi-agent forecasting dashboard for any question with a genuinely
-uncertain, resolvable outcome — a decision, an event, a personal or public
-question. It is not specific to prediction markets. It replaces the manual
-workflow of pasting the same forecasting prompt into several AI chat tabs and
-reconciling the answers by hand: this page sends one standardized prompt to
-four agent LLMs in parallel, parses their structured JSON forecasts, computes
-deterministic summary stats, runs a synthesis pass on a fifth "host" model,
-and saves the result to this repo as a scoreable forecast log.
+uncertain outcome — big or small, personal or public ("Will I be married by
+30?", "Will she text me back?", or anything else). It is not specific to
+prediction markets. It replaces the manual workflow of pasting the same
+forecasting prompt into several AI chat tabs and reconciling the answers by
+hand: this page sends one standardized prompt to four agent LLMs in
+parallel, parses their structured JSON forecasts, computes deterministic
+summary stats, runs a synthesis pass on a fifth "host" model, and saves the
+result to this repo as a scoreable forecast log.
 
 Pure client-side, no build step, no framework, no external CDN dependencies.
 Everything lives in two self-contained HTML files.
@@ -25,13 +26,13 @@ Everything lives in two self-contained HTML files.
 
 There are exactly five providers — Anthropic, OpenAI, Google Gemini, xAI
 (Grok), and OpenRouter — and exactly two roles: one **host** and four **panel
-agents**. Whichever provider you pick as host in Settings, the other four
-automatically become the panel; the host never forecasts, and switching hosts
-mid-session rebalances the panel (the new host's forecast comes out of the
-active panel, the old host joins the panel and its agent call runs, and
-synthesis re-runs). Nothing is ever discarded — every agent result and every
-synthesis pass is kept in the saved record, tagged with the host/panel
-composition that produced it.
+agents**. The host is chosen with a dropdown right on the main page, next to
+the question form; the other four providers automatically become the panel.
+The host never forecasts, and switching hosts mid-session rebalances the
+panel (the new host's forecast comes out of the active panel, the old host
+joins the panel and its agent call runs, and synthesis re-runs). Nothing is
+ever discarded — every agent result and every synthesis pass is kept in the
+saved record, tagged with the host/panel composition that produced it.
 
 Default host is Anthropic, so the default panel is OpenAI, Gemini, xAI, and
 OpenRouter.
@@ -84,12 +85,11 @@ call.
 
 `Save Forecast` commits `forecasts/YYYY-MM-DD-slug.json` via the GitHub
 contents API, using a fine-grained, repo-scoped personal access token. Each
-record contains the question, verbatim resolution criteria, deadline,
-context, an optional reference estimate (a poll number, base rate, or your
-own prior estimate — whatever's relevant), the host/panel composition, every
-agent's raw and parsed output (including which were manually pasted),
-deterministic stats, every synthesis pass (each stamped with its own host and
-panel), and — once you mark it on `forecasts.html` — a resolution.
+record contains the question, optional background, the host/panel
+composition, every agent's raw and parsed output (including which were
+manually pasted), deterministic stats, every synthesis pass (each stamped
+with its own host and panel), and — once you mark it on `forecasts.html` —
+a resolution.
 
 ## Local preview
 

@@ -53,7 +53,6 @@
   .status-pill.pending{color:var(--text-dim);border-color:var(--border);background:#f3f4f6;}
   .status-pill.yes{color:var(--success);border-color:var(--success-dim);background:var(--success-tint);}
   .status-pill.no{color:var(--danger);border-color:var(--danger-dim);background:var(--danger-tint);}
-  .status-pill.overdue{color:var(--warning);border-color:var(--warning-dim);background:var(--warning-tint);}
   .actions-cell{display:flex;gap:4px;}
   .modal-overlay{position:fixed;inset:0;background:rgba(20,22,30,0.4);display:flex;align-items:flex-start;justify-content:center;padding:30px 14px;z-index:100;overflow:auto;}
   .modal{background:#fff;border:1px solid var(--border);max-width:520px;width:100%;padding:22px;border-radius:12px;box-shadow:0 10px 30px rgba(16,24,40,0.18);}
@@ -101,8 +100,6 @@
             <th data-key="date">Date</th>
             <th data-key="question">Question</th>
             <th data-key="finalProb">Final Prob</th>
-            <th data-key="reference">Reference</th>
-            <th data-key="deadline">Deadline</th>
             <th data-key="status">Status</th>
             <th data-key="host">Host</th>
             <th>Resolve</th>
@@ -243,16 +240,13 @@ function rowFrom(rec){
   var d = rec.data;
   var finalProb = finalProbOf(d);
   var resolved = d.resolution && d.resolution.outcome;
-  var overdue = !resolved && d.deadline && d.deadline < new Date().toISOString().slice(0,10);
   return {
     path: rec.path,
     sha: rec.sha,
     date: (d.createdAt || "").slice(0,10),
     question: d.question || "",
     finalProb: finalProb,
-    reference: d.referenceEstimate || null,
-    deadline: d.deadline || "",
-    status: resolved ? resolved : (overdue ? "overdue" : "pending"),
+    status: resolved ? resolved : "pending",
     host: d.host || "",
     raw: d
   };
@@ -290,15 +284,13 @@ function renderTable(){
   var body = $("logBody");
   $("emptyMsg").hidden = sorted.length > 0;
   body.innerHTML = sorted.map(function(r, idx){
-    var statusClass = /^yes$/i.test(r.status) ? "yes" : /^no$/i.test(r.status) ? "no" : r.status === "overdue" ? "overdue" : "pending";
+    var statusClass = /^yes$/i.test(r.status) ? "yes" : /^no$/i.test(r.status) ? "no" : "pending";
     var canResolve = !/^(yes|no)$/i.test(r.status);
     return "" +
       "<tr>" +
       "<td>" + esc(r.date) + "</td>" +
       '<td class="q">' + esc(r.question) + "</td>" +
       "<td>" + (typeof r.finalProb === "number" ? (r.finalProb*100).toFixed(1) + "%" : "—") + "</td>" +
-      "<td>" + (r.reference ? esc(r.reference) : "—") + "</td>" +
-      "<td>" + esc(r.deadline) + "</td>" +
       '<td><span class="status-pill ' + statusClass + '">' + esc(r.status) + "</span></td>" +
       "<td>" + esc(r.host) + "</td>" +
       '<td class="actions-cell">' +
