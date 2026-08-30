@@ -509,8 +509,10 @@ async function callGroq(prompt, apiKey, model){
   });
   if (!res.ok){ throw new Error("Groq " + res.status + ": " + await safeText(res)); }
   var data = await res.json();
-  var text = (data.choices && data.choices[0] && data.choices[0].message && data.choices[0].message.content) || "";
-  return {text:text, webSearch:false};
+  var message = (data.choices && data.choices[0] && data.choices[0].message) || {};
+  var text = message.content || "";
+  var webSearch = Array.isArray(message.executed_tools) && message.executed_tools.length > 0;
+  return {text:text, webSearch:webSearch};
 }
 async function callMistral(prompt, apiKey, model){
   var res = await fetch("https://api.mistral.ai/v1/chat/completions", {
@@ -610,6 +612,12 @@ function badgeHTML(status){
   var map = {idle:"idle", pending:"running", success:"success", error:"error", manual:"manual"};
   return '<span class="badge ' + status + '">' + (map[status] || status) + "</span>";
 }
+function providerSearchCapable(provider){
+  if (provider === "gemini") return true;
+  if (provider === "openrouter") return !!settings.openrouterWebPlugin;
+  if (provider === "groq") return getModel("groq").indexOf("compound") !== -1;
+  return false;
+}
 function renderCard(provider){
   var el = $("card-" + provider);
   if (!el) return;
@@ -617,7 +625,12 @@ function renderCard(provider){
   var html = "";
   html += '<div class="head"><div><div class="provider">' + esc(PROVIDER_LABEL[provider]) + '</div>';
   html += '<div class="model">' + esc(a.model || getModel(provider)) + "</div></div>" + badgeHTML(a.status) + "</div>";
-  html += '<div class="meta-line">Web search: ' + (a.webSearch ? "yes" : "no") + (a.manual ? " &middot; manually pasted" : "") + "</div>";
+  html += '<div class="meta-line">' + (providerSearchCapable(provider) ? "🔎 Live web search enabled" : "📚 No live web search (training data only)") + "</div>";
+  if (a.status === "success"){
+    html += '<div class="meta-line">Web search used this run: ' + (a.webSearch ? "yes" : "no") + "</div>";
+  } else if (a.manual){
+    html += '<div class="meta-line">Manually pasted &mdash; web search status unknown.</div>';
+  }
 
   if (a.status === "success" && a.parsed){
     var p = a.parsed;
@@ -932,6 +945,10 @@ async function saveForecast(){
 
 /* ---------- settings modal ---------- */
 var testStatus = {}; // provider -> 'ok'|'fail'|'testing'
+var PROVIDER_SEARCH_HINT = {
+  groq: "No live web search by default. Set the model to <code>groq/compound</code> to enable it (~$0.005–$0.008 per search, not free).",
+  openrouter: "No live web search unless you enable the plugin below (~$0.007–$0.015 per search, not free)."
+};
 function renderProviderRows(){
   var holder = $("providerRows");
   holder.innerHTML = PROVIDERS.map(function(p){
@@ -944,6 +961,7 @@ function renderProviderRows(){
         '<label>Model' + (p === "openrouter" ? " (any OpenRouter model id)" : "") + '</label>' +
         '<input type="text" data-model="' + p + '" placeholder="' + esc(DEFAULT_MODELS[p]) + '" value="' + esc(settings.models[p]) + '">' +
         '<div class="field-inline"><button type="button" class="secondary" data-test="' + p + '">Test connection</button></div>' +
+        (PROVIDER_SEARCH_HINT[p] ? '<p class="hint">' + PROVIDER_SEARCH_HINT[p] + '</p>' : '') +
       '</div>';
   }).join("");
   holder.querySelectorAll("[data-test]").forEach(function(btn){
