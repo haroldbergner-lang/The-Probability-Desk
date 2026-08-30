@@ -53,7 +53,7 @@ the box:
 | Provider | Default model | Free tier? |
 |---|---|---|
 | Google Gemini | `gemini-3.6-flash` | Yes — Flash models are free via Google AI Studio, no card. (The Pro model is not; don't switch to it unless you're willing to pay.) |
-| OpenRouter | `meta-llama/llama-3.3-70b-instruct:free` | Yes — no card. The `:free` roster rotates weekly; check openrouter.ai/models if this model ID stops working. |
+| OpenRouter | `openrouter/free` | Yes — no card. This is OpenRouter's own router alias that auto-selects among whatever `:free` models are currently available, so it doesn't go stale the way a specific `:free` model ID does. |
 | Groq | `qwen/qwen3-32b` | Yes — no card, all models, ~30 req/min, 14,400 req/day |
 | Mistral | `mistral-large-latest` | Yes — "Experiment" tier, no card, ~1B tokens/month |
 | Cohere | `command-a-plus-05-2026` | Yes — no card, but a "trial" key capped at 1,000 calls/month across all endpoints. Fine for occasional personal use; not meant for heavy use. |
