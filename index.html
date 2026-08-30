@@ -131,6 +131,8 @@
   .dot-openrouter{fill:#0891b2;}
   .dot-gemini{fill:#7c3aed;}
   .dot-openai{fill:#ea580c;}
+  .dot-groq{fill:#e11d48;}
+  .dot-mistral{fill:#ca8a04;}
   .synthesis-result{border:1px solid var(--brand-dim);background:var(--brand-tint);padding:14px;border-radius:10px;margin-top:12px;}
   .synthesis-result h3{margin:0 0 8px;color:var(--brand);font-size:13.5px;}
   .adj-list{margin:6px 0 0;padding-left:16px;font-size:12px;color:var(--text-dim);}
@@ -167,17 +169,19 @@
 </header>
 <main>
 
-  <p class="intro">Ask any question with a genuinely uncertain outcome — big or small, personal or public. One standardized prompt goes to four independent AI models in parallel; a fifth host synthesizes their answers into a single probability.</p>
+  <p class="intro">Ask any question with a genuinely uncertain outcome — big or small, personal or public. One standardized prompt goes to several independent AI models in parallel; a host synthesizes their answers into a single probability.</p>
 
   <section class="card">
     <h2>1. Ask Your Question</h2>
-    <label for="hostSelect">Host (synthesizes the panel — the other 4 providers become the panel)</label>
+    <label for="hostSelect">Host (synthesizes the panel — every other provider with a key becomes a panel agent)</label>
     <select id="hostSelect">
       <option value="anthropic">Anthropic (Claude)</option>
       <option value="openai">OpenAI</option>
       <option value="gemini">Google Gemini</option>
       <option value="xai">xAI (Grok)</option>
       <option value="openrouter">OpenRouter</option>
+      <option value="groq">Groq</option>
+      <option value="mistral">Mistral</option>
     </select>
     <label for="fQuestion">Question</label>
     <input type="text" id="fQuestion" placeholder="e.g. Will I be married by 30? Will she text me back?">
@@ -273,21 +277,25 @@
 "use strict";
 
 /* ---------- constants ---------- */
-var PROVIDERS = ["anthropic","openai","gemini","xai","openrouter"];
+var PROVIDERS = ["anthropic","openai","gemini","xai","openrouter","groq","mistral"];
 var PROVIDER_LABEL = {
   anthropic:"Anthropic (Claude)",
   openai:"OpenAI",
   gemini:"Google Gemini",
   xai:"xAI (Grok)",
-  openrouter:"OpenRouter"
+  openrouter:"OpenRouter",
+  groq:"Groq",
+  mistral:"Mistral"
 };
-var PROVIDER_SHORT = {anthropic:"AN", openai:"OA", gemini:"GM", xai:"XA", openrouter:"OR"};
+var PROVIDER_SHORT = {anthropic:"AN", openai:"OA", gemini:"GM", xai:"XA", openrouter:"OR", groq:"GQ", mistral:"MI"};
 var DEFAULT_MODELS = {
   anthropic:"claude-opus-5",
   openai:"gpt-5.1",
   gemini:"gemini-3.1-pro-preview",
   xai:"grok-4.6",
-  openrouter:"deepseek/deepseek-v4-pro"
+  openrouter:"deepseek/deepseek-v4-pro",
+  groq:"qwen/qwen3-32b",
+  mistral:"mistral-large-latest"
 };
 var XAI_FALLBACK_DEFAULT = "x-ai/grok-4.6";
 var STORAGE_KEY = "pfd_settings_v1";
@@ -348,8 +356,8 @@ window.addEventListener("unhandledrejection", function(e){
 function defaultSettings(){
   return {
     host:"anthropic",
-    keys:{anthropic:"",openai:"",gemini:"",xai:"",openrouter:""},
-    models:{anthropic:"",openai:"",gemini:"",xai:"",openrouter:""},
+    keys:{anthropic:"",openai:"",gemini:"",xai:"",openrouter:"",groq:"",mistral:""},
+    models:{anthropic:"",openai:"",gemini:"",xai:"",openrouter:"",groq:"",mistral:""},
     openrouterWebPlugin:true,
     xaiFallbackModel:"",
     github:{pat:"",owner:"",repo:"",branch:"main"}
@@ -544,6 +552,28 @@ async function callOpenRouter(prompt, apiKey, model, enableWeb){
   var text = (data.choices && data.choices[0] && data.choices[0].message && data.choices[0].message.content) || "";
   return {text:text, webSearch: !!enableWeb};
 }
+async function callGroq(prompt, apiKey, model){
+  var res = await fetch("https://api.groq.com/openai/v1/chat/completions", {
+    method:"POST",
+    headers:{"content-type":"application/json","Authorization":"Bearer " + apiKey},
+    body: JSON.stringify({model: model, messages:[{role:"user", content: prompt}]})
+  });
+  if (!res.ok){ throw new Error("Groq " + res.status + ": " + await safeText(res)); }
+  var data = await res.json();
+  var text = (data.choices && data.choices[0] && data.choices[0].message && data.choices[0].message.content) || "";
+  return {text:text, webSearch:false};
+}
+async function callMistral(prompt, apiKey, model){
+  var res = await fetch("https://api.mistral.ai/v1/chat/completions", {
+    method:"POST",
+    headers:{"content-type":"application/json","Authorization":"Bearer " + apiKey},
+    body: JSON.stringify({model: model, messages:[{role:"user", content: prompt}]})
+  });
+  if (!res.ok){ throw new Error("Mistral " + res.status + ": " + await safeText(res)); }
+  var data = await res.json();
+  var text = (data.choices && data.choices[0] && data.choices[0].message && data.choices[0].message.content) || "";
+  return {text:text, webSearch:false};
+}
 async function callProviderWithFallback(provider, prompt){
   var key = settings.keys[provider];
   var model = getModel(provider);
@@ -551,6 +581,8 @@ async function callProviderWithFallback(provider, prompt){
   if (provider === "openai") return {result: await callOpenAI(prompt, key, model), model: model};
   if (provider === "gemini") return {result: await callGemini(prompt, key, model), model: model};
   if (provider === "openrouter") return {result: await callOpenRouter(prompt, key, model, settings.openrouterWebPlugin), model: model};
+  if (provider === "groq") return {result: await callGroq(prompt, key, model), model: model};
+  if (provider === "mistral") return {result: await callMistral(prompt, key, model), model: model};
   if (provider === "xai"){
     try{
       return {result: await callXAI(prompt, key, model), model: model};
