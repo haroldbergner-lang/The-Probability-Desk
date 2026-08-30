@@ -72,6 +72,9 @@
   button.danger{background:#fff;color:var(--danger);border-color:var(--danger-dim);}
   main{max-width:1100px;margin:0 auto;padding:18px 16px 40px;}
   .intro{color:var(--text-dim);font-size:13.5px;margin:2px 0 18px;max-width:760px;}
+  .provider-status-row{display:flex;gap:8px;flex-wrap:wrap;margin:0 0 18px;}
+  .provider-status-chip{display:flex;align-items:center;gap:6px;background:#fff;border:1px solid var(--border);border-radius:20px;padding:6px 12px;font-size:12px;color:var(--text-dim);box-shadow:0 1px 2px rgba(16,24,40,0.04);}
+  .provider-status-chip > span:nth-child(2){color:var(--text);font-weight:600;}
   .card{
     background:var(--panel);border:1px solid var(--border);
     padding:18px;margin-bottom:18px;border-radius:10px;
@@ -169,6 +172,8 @@
 <main>
 
   <p class="intro">Ask any question with a genuinely uncertain outcome — big or small, personal or public. One standardized prompt goes to several independent AI models in parallel; a host synthesizes their answers into a single probability.</p>
+
+  <div class="provider-status-row" id="providerStatusStrip"></div>
 
   <section class="card">
     <h2>1. Ask Your Question</h2>
@@ -947,16 +952,8 @@ function renderProviderRows(){
 }
 function currentKeyInputValue(p){ var el = document.querySelector('[data-key="' + p + '"]'); return el ? el.value : settings.keys[p]; }
 function currentModelInputValue(p){ var el = document.querySelector('[data-model="' + p + '"]'); return el ? (el.value || DEFAULT_MODELS[p]) : getModel(p); }
-async function testConnection(provider){
-  var dot = document.querySelector('[data-dot="' + provider + '"]');
-  var txt = document.querySelector('[data-status-text="' + provider + '"]');
-  dot.className = "status-dot testing";
-  txt.textContent = "testing…";
-  var key = currentKeyInputValue(provider);
-  var model = currentModelInputValue(provider);
-  if (!key){
-    dot.className = "status-dot fail"; txt.textContent = "no key entered"; return;
-  }
+async function checkProviderConnection(provider, key, model){
+  if (!key) return {ok:false, message:"no key"};
   try{
     if (provider === "gemini"){
       var r3 = await fetch("https://generativelanguage.googleapis.com/v1beta/models/" + encodeURIComponent(model) + ":generateContent?key=" + encodeURIComponent(key), {
@@ -989,11 +986,50 @@ async function testConnection(provider){
       });
       if (!r8.ok) throw new Error(String(r8.status) + ": " + await safeText(r8));
     }
-    dot.className = "status-dot ok"; txt.textContent = "connected";
+    return {ok:true, message:"connected"};
   } catch(err){
-    dot.className = "status-dot fail";
-    txt.textContent = isLikelyCORS(err) ? "blocked (CORS?)" : "failed: " + (err.message || err).toString().slice(0,80);
+    return {ok:false, message: isLikelyCORS(err) ? "blocked (CORS?)" : "failed: " + (err.message || err).toString().slice(0,80)};
   }
+}
+async function testConnection(provider){
+  var dot = document.querySelector('[data-dot="' + provider + '"]');
+  var txt = document.querySelector('[data-status-text="' + provider + '"]');
+  dot.className = "status-dot testing";
+  txt.textContent = "testing…";
+  var key = currentKeyInputValue(provider);
+  var model = currentModelInputValue(provider);
+  var result = await checkProviderConnection(provider, key, model);
+  dot.className = "status-dot " + (result.ok ? "ok" : "fail");
+  txt.textContent = result.ok ? "connected" : (key ? result.message : "no key entered");
+  return result;
+}
+async function refreshHomeStatus(provider){
+  var dot = document.querySelector('[data-home-dot="' + provider + '"]');
+  var txt = document.querySelector('[data-home-text="' + provider + '"]');
+  if (!dot || !txt) return;
+  var key = settings.keys[provider];
+  if (!key){ dot.className = "status-dot"; txt.textContent = "no key"; return; }
+  dot.className = "status-dot testing"; txt.textContent = "checking…";
+  var result = await checkProviderConnection(provider, key, getModel(provider));
+  dot.className = "status-dot " + (result.ok ? "ok" : "fail");
+  txt.textContent = result.ok ? "connected" : result.message;
+}
+function renderHomeStatusStrip(){
+  var holder = $("providerStatusStrip");
+  if (!holder) return;
+  holder.innerHTML = PROVIDERS.map(function(p){
+    return '<div class="provider-status-chip">' +
+      '<span class="status-dot" data-home-dot="' + p + '"></span>' +
+      '<span>' + esc(PROVIDER_LABEL[p]) + '</span>' +
+      '<span class="small" data-home-text="' + p + '">' + (settings.keys[p] ? "checking…" : "no key") + '</span>' +
+    '</div>';
+  }).join("");
+}
+function refreshAllHomeStatus(){
+  renderHomeStatusStrip();
+  PROVIDERS.forEach(function(p){
+    if (settings.keys[p]) refreshHomeStatus(p).catch(function(e){ console.error(e); });
+  });
 }
 async function testGithub(){
   var pat = $("sGhPat").value, owner = $("sGhOwner").value, repo = $("sGhRepo").value;
@@ -1036,6 +1072,7 @@ function persistSettingsFromModal(){
   saveSettings();
   closeSettingsModal();
   toast("Settings saved.", false);
+  refreshAllHomeStatus();
 }
 
 /* ---------- top-level UI wiring ---------- */
@@ -1116,6 +1153,7 @@ document.addEventListener("DOMContentLoaded", function(){
   $("btnTestGithub").addEventListener("click", function(){ testGithub().catch(function(e){ console.error(e); }); });
   $("settingsModal").addEventListener("click", function(e){ if (e.target === $("settingsModal")) closeSettingsModal(); });
   restoreRunState();
+  refreshAllHomeStatus();
 });
 
 })();
