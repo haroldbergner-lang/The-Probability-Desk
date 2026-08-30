@@ -22,13 +22,16 @@ Everything lives in two self-contained HTML files.
   forecast, YES/NO resolution marking, and a running Brier score over resolved
   forecasts.
 
-## Four providers, two roles
+## Five providers, two roles
 
-There are four providers — Google Gemini, OpenRouter, Groq, and Mistral —
-and exactly two roles: one **host** and the rest **panel agents**. Every one
-of the four was chosen because it can be used for genuinely free, no-card
-API access (see the table below); Anthropic, OpenAI, and xAI were
+There are five providers — Google Gemini, OpenRouter, Groq, Mistral, and
+Cohere — and exactly two roles: one **host** and the rest **panel agents**.
+Every one of the five was chosen because it can be used for genuinely free,
+no-card API access (see the table below); Anthropic, OpenAI, and xAI were
 deliberately left out because none of them has any free API tier at all.
+SambaNova Cloud was also considered and rejected — it has a generous free
+tier, but its API blocks direct browser calls (no CORS headers on
+preflight), which would require a backend proxy this app doesn't have.
 
 The host is chosen with a dropdown right on the main page, next to the
 question form; every other provider that has a key configured automatically
@@ -40,8 +43,8 @@ re-runs). Nothing is ever discarded — every agent result and every synthesis
 pass is kept in the saved record, tagged with the host/panel composition
 that produced it.
 
-Default host is Google Gemini, so the default panel is OpenRouter, Groq, and
-Mistral.
+Default host is Google Gemini, so the default panel is OpenRouter, Groq,
+Mistral, and Cohere.
 
 Model IDs move fast, so every provider's model is editable in Settings; the
 shipped defaults (current as of August 2026) are chosen to be free out of
@@ -53,14 +56,15 @@ the box:
 | OpenRouter | `meta-llama/llama-3.3-70b-instruct:free` | Yes — no card. The `:free` roster rotates weekly; check openrouter.ai/models if this model ID stops working. |
 | Groq | `qwen/qwen3-32b` | Yes — no card, all models, ~30 req/min, 14,400 req/day |
 | Mistral | `mistral-large-latest` | Yes — "Experiment" tier, no card, ~1B tokens/month |
+| Cohere | `command-a-plus-05-2026` | Yes — no card, but a "trial" key capped at 1,000 calls/month across all endpoints. Fine for occasional personal use; not meant for heavy use. |
 
-None of these four make outbound web-search calls by default (OpenRouter has
+None of these five make outbound web-search calls by default (OpenRouter has
 an optional "web" plugin toggle in Settings, off by default — leave it off
 if you want a guaranteed $0, since that plugin can add cost even on a free
 chat model).
 
 CORS (calling each API directly from the browser) has been verified for all
-four via preflight `OPTIONS` requests — every one returns an
+five via preflight `OPTIONS` requests — every one returns an
 `Access-Control-Allow-Origin` header permitting a browser call, so no
 backend proxy is needed for any of them.
 

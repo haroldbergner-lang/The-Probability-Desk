@@ -163,9 +163,9 @@ window.addEventListener("unhandledrejection", function(e){
 
 function defaultSettings(){
   return {
-    host:"anthropic", keys:{anthropic:"",openai:"",gemini:"",xai:"",openrouter:"",groq:"",mistral:""},
-    models:{anthropic:"",openai:"",gemini:"",xai:"",openrouter:"",groq:"",mistral:""},
-    openrouterWebPlugin:true, xaiFallbackModel:"",
+    host:"gemini", keys:{gemini:"",openrouter:"",groq:"",mistral:"",cohere:""},
+    models:{gemini:"",openrouter:"",groq:"",mistral:"",cohere:""},
+    openrouterWebPlugin:false,
     github:{pat:"",owner:"",repo:"",branch:"main"}
   };
 }
