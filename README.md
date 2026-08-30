@@ -58,10 +58,14 @@ the box:
 | Mistral | `mistral-small-latest` | Yes — "Experiment" tier, no card, ~1B tokens/month. (Mistral Large requires their paid Scale plan — Small is what's actually free.) |
 | Cohere | `command-a-plus-05-2026` | Yes — no card, but a "trial" key capped at 1,000 calls/month across all endpoints. Fine for occasional personal use; not meant for heavy use. |
 
-None of these five make outbound web-search calls by default (OpenRouter has
-an optional "web" plugin toggle in Settings, off by default — leave it off
-if you want a guaranteed $0, since that plugin can add cost even on a free
-chat model).
+None of these five make outbound web-search calls by default. Only Google
+Gemini has always-on live search; the other four are answering purely from
+training data unless you deliberately enable a paid search add-on (none of
+which are free): OpenRouter's "web" plugin toggle in Settings (~$0.007–
+$0.015/search) or setting Groq's model to `groq/compound` (~$0.005–$0.008/
+search). Every agent card shows a "🔎 Live web search enabled" or "📚 No
+live web search" badge reflecting the current configuration, so it's always
+visible at a glance which agents can actually look things up.
 
 CORS (calling each API directly from the browser) has been verified for all
 five via preflight `OPTIONS` requests — every one returns an
