@@ -22,47 +22,47 @@ Everything lives in two self-contained HTML files.
   forecast, YES/NO resolution marking, and a running Brier score over resolved
   forecasts.
 
-## Seven providers, two roles
+## Four providers, two roles
 
-There are seven providers — Anthropic, OpenAI, Google Gemini, xAI (Grok),
-OpenRouter, Groq, and Mistral — and exactly two roles: one **host** and the
-rest **panel agents**. The host is chosen with a dropdown right on the main
-page, next to the question form; every other provider that has a key
-configured automatically becomes a panel agent (providers without a key sit
-idle for manual paste — see below). The host never forecasts, and switching
-hosts mid-session rebalances the panel (the new host's forecast comes out of
-the active panel, the old host joins the panel and its agent call runs, and
-synthesis re-runs). Nothing is ever discarded — every agent result and every
-synthesis pass is kept in the saved record, tagged with the host/panel
-composition that produced it.
+There are four providers — Google Gemini, OpenRouter, Groq, and Mistral —
+and exactly two roles: one **host** and the rest **panel agents**. Every one
+of the four was chosen because it can be used for genuinely free, no-card
+API access (see the table below); Anthropic, OpenAI, and xAI were
+deliberately left out because none of them has any free API tier at all.
 
-Default host is Anthropic, so the default panel is the other six.
+The host is chosen with a dropdown right on the main page, next to the
+question form; every other provider that has a key configured automatically
+becomes a panel agent (providers without a key sit idle for manual paste —
+see below). The host never forecasts, and switching hosts mid-session
+rebalances the panel (the new host's forecast comes out of the active panel,
+the old host joins the panel and its agent call runs, and synthesis
+re-runs). Nothing is ever discarded — every agent result and every synthesis
+pass is kept in the saved record, tagged with the host/panel composition
+that produced it.
+
+Default host is Google Gemini, so the default panel is OpenRouter, Groq, and
+Mistral.
 
 Model IDs move fast, so every provider's model is editable in Settings; the
-shipped defaults (current as of August 2026) are:
+shipped defaults (current as of August 2026) are chosen to be free out of
+the box:
 
-| Provider | Default model | Web grounding | Free tier? |
-|---|---|---|---|
-| Anthropic | `claude-opus-5` | `web_search` server tool | No |
-| OpenAI | `gpt-5.1` | Responses API `web_search` tool | No |
-| Google Gemini | `gemini-3.1-pro-preview` | `google_search` grounding tool | Pro: no. Switch the model to a Flash variant for a genuine no-card free tier. |
-| xAI (Grok) | `grok-4.6` | Live Search (`search_parameters`) | No |
-| OpenRouter | `deepseek/deepseek-v4-pro` | optional `web` plugin (toggle in Settings) | No, but `:free`-suffixed model IDs are (rotating roster, check openrouter.ai/models) |
-| Groq | `qwen/qwen3-32b` | none | Yes — no card, all models, ~30 req/min |
-| Mistral | `mistral-large-latest` | none | Yes — "Experiment" tier, no card, ~1B tokens/month |
+| Provider | Default model | Free tier? |
+|---|---|---|
+| Google Gemini | `gemini-3.6-flash` | Yes — Flash models are free via Google AI Studio, no card. (The Pro model is not; don't switch to it unless you're willing to pay.) |
+| OpenRouter | `meta-llama/llama-3.3-70b-instruct:free` | Yes — no card. The `:free` roster rotates weekly; check openrouter.ai/models if this model ID stops working. |
+| Groq | `qwen/qwen3-32b` | Yes — no card, all models, ~30 req/min, 14,400 req/day |
+| Mistral | `mistral-large-latest` | Yes — "Experiment" tier, no card, ~1B tokens/month |
 
-OpenRouter defaults to DeepSeek V4 Pro and Groq to Qwen3 32B as strong,
-distinct-family models — swap either for any model string the respective
-platform hosts.
+None of these four make outbound web-search calls by default (OpenRouter has
+an optional "web" plugin toggle in Settings, off by default — leave it off
+if you want a guaranteed $0, since that plugin can add cost even on a free
+chat model).
 
 CORS (calling each API directly from the browser) has been verified for all
-seven providers via preflight `OPTIONS` requests — every one returns an
-`Access-Control-Allow-Origin` header permitting a browser call. xAI's is
-particularly undocumented, so as a safety net a direct call to `api.x.ai`
-that still fails with what looks like a CORS/preflight rejection is
-automatically retried by routing that agent through OpenRouter instead
-(configurable fallback model, default `x-ai/grok-4.6`) — provided an
-OpenRouter key is configured.
+four via preflight `OPTIONS` requests — every one returns an
+`Access-Control-Allow-Origin` header permitting a browser call, so no
+backend proxy is needed for any of them.
 
 ## Host synthesis rules
 

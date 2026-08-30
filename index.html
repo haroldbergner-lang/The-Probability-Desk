@@ -127,10 +127,8 @@
   .dotplot line{stroke:var(--line);}
   .dotplot .dotlabel{fill:var(--text-dim);font-size:9px;font-family:var(--font);}
   .dot{fill:var(--brand);stroke:#fff;stroke-width:1.5;opacity:0.95;}
-  .dot-xai{fill:var(--warning);}
   .dot-openrouter{fill:#0891b2;}
   .dot-gemini{fill:#7c3aed;}
-  .dot-openai{fill:#ea580c;}
   .dot-groq{fill:#e11d48;}
   .dot-mistral{fill:#ca8a04;}
   .synthesis-result{border:1px solid var(--brand-dim);background:var(--brand-tint);padding:14px;border-radius:10px;margin-top:12px;}
@@ -175,10 +173,7 @@
     <h2>1. Ask Your Question</h2>
     <label for="hostSelect">Host (synthesizes the panel — every other provider with a key becomes a panel agent)</label>
     <select id="hostSelect">
-      <option value="anthropic">Anthropic (Claude)</option>
-      <option value="openai">OpenAI</option>
       <option value="gemini">Google Gemini</option>
-      <option value="xai">xAI (Grok)</option>
       <option value="openrouter">OpenRouter</option>
       <option value="groq">Groq</option>
       <option value="mistral">Mistral</option>
@@ -247,10 +242,8 @@
 
     <div class="checkbox-line">
       <input type="checkbox" id="sOpenRouterWeb">
-      <label style="margin:0;text-transform:none;" for="sOpenRouterWeb">Enable OpenRouter web search plugin (best-effort; not all models honor it)</label>
+      <label style="margin:0;text-transform:none;" for="sOpenRouterWeb">Enable OpenRouter web search plugin (may add cost even on a free model — leave off for guaranteed $0)</label>
     </div>
-    <label for="sXaiFallback">xAI → OpenRouter CORS fallback model</label>
-    <input type="text" id="sXaiFallback" placeholder="x-ai/grok-4.6">
 
     <hr style="border-color:var(--border);margin:16px 0;">
     <h2 style="margin-top:0;">GitHub (forecast log)</h2>
@@ -277,27 +270,20 @@
 "use strict";
 
 /* ---------- constants ---------- */
-var PROVIDERS = ["anthropic","openai","gemini","xai","openrouter","groq","mistral"];
+var PROVIDERS = ["gemini","openrouter","groq","mistral"];
 var PROVIDER_LABEL = {
-  anthropic:"Anthropic (Claude)",
-  openai:"OpenAI",
   gemini:"Google Gemini",
-  xai:"xAI (Grok)",
   openrouter:"OpenRouter",
   groq:"Groq",
   mistral:"Mistral"
 };
-var PROVIDER_SHORT = {anthropic:"AN", openai:"OA", gemini:"GM", xai:"XA", openrouter:"OR", groq:"GQ", mistral:"MI"};
+var PROVIDER_SHORT = {gemini:"GM", openrouter:"OR", groq:"GQ", mistral:"MI"};
 var DEFAULT_MODELS = {
-  anthropic:"claude-opus-5",
-  openai:"gpt-5.1",
-  gemini:"gemini-3.1-pro-preview",
-  xai:"grok-4.6",
-  openrouter:"deepseek/deepseek-v4-pro",
+  gemini:"gemini-3.6-flash",
+  openrouter:"meta-llama/llama-3.3-70b-instruct:free",
   groq:"qwen/qwen3-32b",
   mistral:"mistral-large-latest"
 };
-var XAI_FALLBACK_DEFAULT = "x-ai/grok-4.6";
 var STORAGE_KEY = "pfd_settings_v1";
 
 /* ---------- state ---------- */
@@ -328,8 +314,7 @@ function isLikelyCORS(err){
 }
 function describeError(provider, err){
   if (isLikelyCORS(err)){
-    return PROVIDER_LABEL[provider] + " request was blocked before it reached the server — almost certainly a browser CORS/preflight rejection, not an API error. Use manual paste for this agent" +
-      (provider === "xai" ? ", or configure an OpenRouter key so this agent automatically falls back to routing through OpenRouter." : ".");
+    return PROVIDER_LABEL[provider] + " request was blocked before it reached the server — almost certainly a browser CORS/preflight rejection, not an API error. Use manual paste for this agent.";
   }
   return err && err.message ? err.message : String(err);
 }
@@ -355,11 +340,10 @@ window.addEventListener("unhandledrejection", function(e){
 /* ---------- settings persistence ---------- */
 function defaultSettings(){
   return {
-    host:"anthropic",
-    keys:{anthropic:"",openai:"",gemini:"",xai:"",openrouter:"",groq:"",mistral:""},
-    models:{anthropic:"",openai:"",gemini:"",xai:"",openrouter:"",groq:"",mistral:""},
-    openrouterWebPlugin:true,
-    xaiFallbackModel:"",
+    host:"gemini",
+    keys:{gemini:"",openrouter:"",groq:"",mistral:""},
+    models:{gemini:"",openrouter:"",groq:"",mistral:""},
+    openrouterWebPlugin:false,
     github:{pat:"",owner:"",repo:"",branch:"main"}
   };
 }
@@ -369,12 +353,12 @@ function loadSettings(){
     if (!raw) return defaultSettings();
     var parsed = JSON.parse(raw);
     var d = defaultSettings();
+    var host = PROVIDERS.indexOf(parsed.host) !== -1 ? parsed.host : d.host;
     return {
-      host: parsed.host || d.host,
+      host: host,
       keys: Object.assign({}, d.keys, parsed.keys || {}),
       models: Object.assign({}, d.models, parsed.models || {}),
-      openrouterWebPlugin: parsed.openrouterWebPlugin !== undefined ? parsed.openrouterWebPlugin : true,
-      xaiFallbackModel: parsed.xaiFallbackModel || "",
+      openrouterWebPlugin: parsed.openrouterWebPlugin !== undefined ? parsed.openrouterWebPlugin : false,
       github: Object.assign({}, d.github, parsed.github || {})
     };
   } catch(e){ return defaultSettings(); }
@@ -465,50 +449,6 @@ function parseSynthesisJSON(text){
 }
 
 /* ---------- provider calls ---------- */
-async function callAnthropic(prompt, apiKey, model){
-  var res = await fetch("https://api.anthropic.com/v1/messages", {
-    method:"POST",
-    headers:{
-      "content-type":"application/json",
-      "x-api-key":apiKey,
-      "anthropic-version":"2023-06-01",
-      "anthropic-dangerous-direct-browser-access":"true"
-    },
-    body: JSON.stringify({
-      model: model,
-      max_tokens: 2048,
-      messages:[{role:"user", content: prompt}],
-      tools:[{type:"web_search_20250305", name:"web_search", max_uses:5}]
-    })
-  });
-  if (!res.ok){ throw new Error("Anthropic " + res.status + ": " + await safeText(res)); }
-  var data = await res.json();
-  var content = data.content || [];
-  var text = content.filter(function(b){ return b.type === "text"; }).map(function(b){ return b.text; }).join("\n");
-  var webSearch = content.some(function(b){ return b.type === "server_tool_use" || b.type === "web_search_tool_result"; });
-  return {text:text, webSearch:webSearch};
-}
-async function callOpenAI(prompt, apiKey, model){
-  var res = await fetch("https://api.openai.com/v1/responses", {
-    method:"POST",
-    headers:{"content-type":"application/json","Authorization":"Bearer " + apiKey},
-    body: JSON.stringify({model: model, input: prompt, tools:[{type:"web_search"}]})
-  });
-  if (!res.ok){ throw new Error("OpenAI " + res.status + ": " + await safeText(res)); }
-  var data = await res.json();
-  var text = data.output_text || "";
-  if (!text && Array.isArray(data.output)){
-    var parts = [];
-    data.output.forEach(function(item){
-      (item.content || []).forEach(function(c){
-        if (c.type === "output_text" && c.text) parts.push(c.text);
-      });
-    });
-    text = parts.join("\n");
-  }
-  var webSearch = Array.isArray(data.output) && data.output.some(function(item){ return item.type === "web_search_call"; });
-  return {text:text, webSearch: !!webSearch};
-}
 async function callGemini(prompt, apiKey, model){
   var url = "https://generativelanguage.googleapis.com/v1beta/models/" + encodeURIComponent(model) + ":generateContent?key=" + encodeURIComponent(apiKey);
   var res = await fetch(url, {
@@ -521,22 +461,6 @@ async function callGemini(prompt, apiKey, model){
   var cand = (data.candidates || [])[0];
   var text = ((cand && cand.content && cand.content.parts) || []).map(function(p){ return p.text || ""; }).join("\n");
   var webSearch = !!(cand && cand.groundingMetadata);
-  return {text:text, webSearch:webSearch};
-}
-async function callXAI(prompt, apiKey, model){
-  var res = await fetch("https://api.x.ai/v1/chat/completions", {
-    method:"POST",
-    headers:{"content-type":"application/json","Authorization":"Bearer " + apiKey},
-    body: JSON.stringify({
-      model: model,
-      messages:[{role:"user", content: prompt}],
-      search_parameters:{mode:"on", return_citations:true}
-    })
-  });
-  if (!res.ok){ throw new Error("xAI " + res.status + ": " + await safeText(res)); }
-  var data = await res.json();
-  var text = (data.choices && data.choices[0] && data.choices[0].message && data.choices[0].message.content) || "";
-  var webSearch = !!(data.citations && data.citations.length) || !!(data.usage && data.usage.num_sources_used);
   return {text:text, webSearch:webSearch};
 }
 async function callOpenRouter(prompt, apiKey, model, enableWeb){
@@ -577,24 +501,10 @@ async function callMistral(prompt, apiKey, model){
 async function callProviderWithFallback(provider, prompt){
   var key = settings.keys[provider];
   var model = getModel(provider);
-  if (provider === "anthropic") return {result: await callAnthropic(prompt, key, model), model: model};
-  if (provider === "openai") return {result: await callOpenAI(prompt, key, model), model: model};
   if (provider === "gemini") return {result: await callGemini(prompt, key, model), model: model};
   if (provider === "openrouter") return {result: await callOpenRouter(prompt, key, model, settings.openrouterWebPlugin), model: model};
   if (provider === "groq") return {result: await callGroq(prompt, key, model), model: model};
   if (provider === "mistral") return {result: await callMistral(prompt, key, model), model: model};
-  if (provider === "xai"){
-    try{
-      return {result: await callXAI(prompt, key, model), model: model};
-    } catch(err){
-      if (isLikelyCORS(err) && settings.keys.openrouter){
-        var fbModel = settings.xaiFallbackModel || XAI_FALLBACK_DEFAULT;
-        var r = await callOpenRouter(prompt, settings.keys.openrouter, fbModel, false);
-        return {result: r, model: fbModel + " (via OpenRouter, xAI CORS fallback)"};
-      }
-      throw err;
-    }
-  }
   throw new Error("Unknown provider " + provider);
 }
 
@@ -1011,38 +921,30 @@ async function testConnection(provider){
     dot.className = "status-dot fail"; txt.textContent = "no key entered"; return;
   }
   try{
-    if (provider === "anthropic"){
-      var r = await fetch("https://api.anthropic.com/v1/messages", {
-        method:"POST",
-        headers:{"content-type":"application/json","x-api-key":key,"anthropic-version":"2023-06-01","anthropic-dangerous-direct-browser-access":"true"},
-        body: JSON.stringify({model:model, max_tokens:8, messages:[{role:"user", content:"hi"}]})
-      });
-      if (!r.ok) throw new Error(String(r.status) + ": " + await safeText(r));
-    } else if (provider === "openai"){
-      var r2 = await fetch("https://api.openai.com/v1/responses", {
-        method:"POST",
-        headers:{"content-type":"application/json","Authorization":"Bearer " + key},
-        body: JSON.stringify({model:model, input:"hi", max_output_tokens:16})
-      });
-      if (!r2.ok) throw new Error(String(r2.status) + ": " + await safeText(r2));
-    } else if (provider === "gemini"){
+    if (provider === "gemini"){
       var r3 = await fetch("https://generativelanguage.googleapis.com/v1beta/models/" + encodeURIComponent(model) + ":generateContent?key=" + encodeURIComponent(key), {
         method:"POST", headers:{"content-type":"application/json"},
         body: JSON.stringify({contents:[{parts:[{text:"hi"}]}]})
       });
       if (!r3.ok) throw new Error(String(r3.status) + ": " + await safeText(r3));
-    } else if (provider === "xai"){
-      var r4 = await fetch("https://api.x.ai/v1/chat/completions", {
-        method:"POST", headers:{"content-type":"application/json","Authorization":"Bearer " + key},
-        body: JSON.stringify({model:model, messages:[{role:"user", content:"hi"}], max_tokens:8})
-      });
-      if (!r4.ok) throw new Error(String(r4.status) + ": " + await safeText(r4));
     } else if (provider === "openrouter"){
       var r5 = await fetch("https://openrouter.ai/api/v1/chat/completions", {
         method:"POST", headers:{"content-type":"application/json","Authorization":"Bearer " + key},
         body: JSON.stringify({model:model, messages:[{role:"user", content:"hi"}], max_tokens:8})
       });
       if (!r5.ok) throw new Error(String(r5.status) + ": " + await safeText(r5));
+    } else if (provider === "groq"){
+      var r6 = await fetch("https://api.groq.com/openai/v1/chat/completions", {
+        method:"POST", headers:{"content-type":"application/json","Authorization":"Bearer " + key},
+        body: JSON.stringify({model:model, messages:[{role:"user", content:"hi"}], max_tokens:8})
+      });
+      if (!r6.ok) throw new Error(String(r6.status) + ": " + await safeText(r6));
+    } else if (provider === "mistral"){
+      var r7 = await fetch("https://api.mistral.ai/v1/chat/completions", {
+        method:"POST", headers:{"content-type":"application/json","Authorization":"Bearer " + key},
+        body: JSON.stringify({model:model, messages:[{role:"user", content:"hi"}], max_tokens:8})
+      });
+      if (!r7.ok) throw new Error(String(r7.status) + ": " + await safeText(r7));
     }
     dot.className = "status-dot ok"; txt.textContent = "connected";
   } catch(err){
@@ -1068,7 +970,6 @@ async function testGithub(){
 function openSettingsModal(){
   renderProviderRows();
   $("sOpenRouterWeb").checked = !!settings.openrouterWebPlugin;
-  $("sXaiFallback").value = settings.xaiFallbackModel || "";
   $("sGhPat").value = settings.github.pat || "";
   $("sGhOwner").value = settings.github.owner || "";
   $("sGhRepo").value = settings.github.repo || "";
@@ -1083,7 +984,6 @@ function persistSettingsFromModal(){
     settings.models[p] = document.querySelector('[data-model="' + p + '"]').value.trim();
   });
   settings.openrouterWebPlugin = $("sOpenRouterWeb").checked;
-  settings.xaiFallbackModel = $("sXaiFallback").value.trim();
   settings.github = {
     pat: $("sGhPat").value.trim(),
     owner: $("sGhOwner").value.trim(),
