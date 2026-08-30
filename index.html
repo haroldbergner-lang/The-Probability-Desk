@@ -131,6 +131,7 @@
   .dot-gemini{fill:#7c3aed;}
   .dot-groq{fill:#e11d48;}
   .dot-mistral{fill:#ca8a04;}
+  .dot-cohere{fill:#059669;}
   .synthesis-result{border:1px solid var(--brand-dim);background:var(--brand-tint);padding:14px;border-radius:10px;margin-top:12px;}
   .synthesis-result h3{margin:0 0 8px;color:var(--brand);font-size:13.5px;}
   .adj-list{margin:6px 0 0;padding-left:16px;font-size:12px;color:var(--text-dim);}
@@ -177,6 +178,7 @@
       <option value="openrouter">OpenRouter</option>
       <option value="groq">Groq</option>
       <option value="mistral">Mistral</option>
+      <option value="cohere">Cohere</option>
     </select>
     <label for="fQuestion">Question</label>
     <input type="text" id="fQuestion" placeholder="e.g. Will I be married by 30? Will she text me back?">
@@ -270,19 +272,21 @@
 "use strict";
 
 /* ---------- constants ---------- */
-var PROVIDERS = ["gemini","openrouter","groq","mistral"];
+var PROVIDERS = ["gemini","openrouter","groq","mistral","cohere"];
 var PROVIDER_LABEL = {
   gemini:"Google Gemini",
   openrouter:"OpenRouter",
   groq:"Groq",
-  mistral:"Mistral"
+  mistral:"Mistral",
+  cohere:"Cohere"
 };
-var PROVIDER_SHORT = {gemini:"GM", openrouter:"OR", groq:"GQ", mistral:"MI"};
+var PROVIDER_SHORT = {gemini:"GM", openrouter:"OR", groq:"GQ", mistral:"MI", cohere:"CO"};
 var DEFAULT_MODELS = {
   gemini:"gemini-3.6-flash",
   openrouter:"meta-llama/llama-3.3-70b-instruct:free",
   groq:"qwen/qwen3-32b",
-  mistral:"mistral-large-latest"
+  mistral:"mistral-large-latest",
+  cohere:"command-a-plus-05-2026"
 };
 var STORAGE_KEY = "pfd_settings_v1";
 
@@ -341,8 +345,8 @@ window.addEventListener("unhandledrejection", function(e){
 function defaultSettings(){
   return {
     host:"gemini",
-    keys:{gemini:"",openrouter:"",groq:"",mistral:""},
-    models:{gemini:"",openrouter:"",groq:"",mistral:""},
+    keys:{gemini:"",openrouter:"",groq:"",mistral:"",cohere:""},
+    models:{gemini:"",openrouter:"",groq:"",mistral:"",cohere:""},
     openrouterWebPlugin:false,
     github:{pat:"",owner:"",repo:"",branch:"main"}
   };
@@ -498,6 +502,18 @@ async function callMistral(prompt, apiKey, model){
   var text = (data.choices && data.choices[0] && data.choices[0].message && data.choices[0].message.content) || "";
   return {text:text, webSearch:false};
 }
+async function callCohere(prompt, apiKey, model){
+  var res = await fetch("https://api.cohere.com/v2/chat", {
+    method:"POST",
+    headers:{"content-type":"application/json","Authorization":"Bearer " + apiKey},
+    body: JSON.stringify({model: model, messages:[{role:"user", content: prompt}]})
+  });
+  if (!res.ok){ throw new Error("Cohere " + res.status + ": " + await safeText(res)); }
+  var data = await res.json();
+  var content = (data.message && data.message.content) || [];
+  var text = content.filter(function(b){ return b.type === "text"; }).map(function(b){ return b.text; }).join("\n");
+  return {text:text, webSearch:false};
+}
 async function callProviderWithFallback(provider, prompt){
   var key = settings.keys[provider];
   var model = getModel(provider);
@@ -505,6 +521,7 @@ async function callProviderWithFallback(provider, prompt){
   if (provider === "openrouter") return {result: await callOpenRouter(prompt, key, model, settings.openrouterWebPlugin), model: model};
   if (provider === "groq") return {result: await callGroq(prompt, key, model), model: model};
   if (provider === "mistral") return {result: await callMistral(prompt, key, model), model: model};
+  if (provider === "cohere") return {result: await callCohere(prompt, key, model), model: model};
   throw new Error("Unknown provider " + provider);
 }
 
@@ -945,6 +962,12 @@ async function testConnection(provider){
         body: JSON.stringify({model:model, messages:[{role:"user", content:"hi"}], max_tokens:8})
       });
       if (!r7.ok) throw new Error(String(r7.status) + ": " + await safeText(r7));
+    } else if (provider === "cohere"){
+      var r8 = await fetch("https://api.cohere.com/v2/chat", {
+        method:"POST", headers:{"content-type":"application/json","Authorization":"Bearer " + key},
+        body: JSON.stringify({model:model, messages:[{role:"user", content:"hi"}]})
+      });
+      if (!r8.ok) throw new Error(String(r8.status) + ": " + await safeText(r8));
     }
     dot.className = "status-dot ok"; txt.textContent = "connected";
   } catch(err){
