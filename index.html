@@ -845,10 +845,11 @@ async function onHostChange(newHost){
   if (newHost === oldHost) return;
   settings.host = newHost;
   saveSettings();
+  renderPanelSummary();
+  if (!currentRun) return;
   renderPanelLayout();
   refreshStats();
   refreshSynthesisAvailability();
-  if (!currentRun) return;
   var newPanel = panelFor(newHost);
   for (var i = 0; i < newPanel.length; i++){
     var p = newPanel[i];
