@@ -86,6 +86,13 @@ repo and never logged. Every provider row in Settings has a cheap "Test
 connection" call so you can confirm a key works before running a real
 forecast.
 
+The active run (question, background, every agent's status/result, stats,
+and any synthesis passes) is also persisted to `localStorage`, separately
+from settings, and restored automatically on page reload — so refreshing
+the tab doesn't lose your in-progress forecast. "Clear Form" wipes that
+persisted run along with the form fields, for starting a genuinely new
+forecast.
+
 Any subset of the panel agents can fail (bad key, rate limit, CORS) —
 the rest of the run still completes (`Promise.allSettled`), and every agent
 card has a manual-paste fallback: run that model by hand in a chat tab and
