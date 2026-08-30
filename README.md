@@ -1,11 +1,13 @@
 # The Probability Desk
 
-A multi-agent probability forecasting dashboard. It replaces the manual workflow
-of pasting the same forecasting prompt into several AI chat tabs and reconciling
-the answers by hand: this page sends one standardized prompt to four agent
-LLMs in parallel, parses their structured JSON forecasts, computes deterministic
-summary stats, runs a synthesis pass on a fifth "host" model, and saves the
-result to this repo as a scoreable forecast log.
+A multi-agent forecasting dashboard for any question with a genuinely
+uncertain, resolvable outcome — a decision, an event, a personal or public
+question. It is not specific to prediction markets. It replaces the manual
+workflow of pasting the same forecasting prompt into several AI chat tabs and
+reconciling the answers by hand: this page sends one standardized prompt to
+four agent LLMs in parallel, parses their structured JSON forecasts, computes
+deterministic summary stats, runs a synthesis pass on a fifth "host" model,
+and saves the result to this repo as a scoreable forecast log.
 
 Pure client-side, no build step, no framework, no external CDN dependencies.
 Everything lives in two self-contained HTML files.
@@ -54,6 +56,16 @@ rejection, the app automatically retries that agent by routing it through
 OpenRouter instead (configurable fallback model, default `x-ai/grok-4.6`) —
 provided an OpenRouter key is configured.
 
+## Host synthesis rules
+
+The host never forecasts — it starts from the mechanical average of the
+panel and adjusts only for stated reasons: agreement vs. disagreement among
+the agents, the strength of each agent's reasoning, and outliers. It never
+overweights one agent without a concrete reason. It widens the uncertainty
+range when the panel is dispersed, and raises its confidence rating when the
+panel is tightly clustered with sound reasoning (lowering it when dispersed
+or the reasoning is weak) — calibrated realism over false precision.
+
 ## Bring your own keys
 
 All API keys and the GitHub token are entered in the Settings modal and
@@ -73,7 +85,8 @@ call.
 `Save Forecast` commits `forecasts/YYYY-MM-DD-slug.json` via the GitHub
 contents API, using a fine-grained, repo-scoped personal access token. Each
 record contains the question, verbatim resolution criteria, deadline,
-context, market price at forecast time, the host/panel composition, every
+context, an optional reference estimate (a poll number, base rate, or your
+own prior estimate — whatever's relevant), the host/panel composition, every
 agent's raw and parsed output (including which were manually pasted),
 deterministic stats, every synthesis pass (each stamped with its own host and
 panel), and — once you mark it on `forecasts.html` — a resolution.
