@@ -289,6 +289,7 @@ var DEFAULT_MODELS = {
   cohere:"command-a-plus-05-2026"
 };
 var STORAGE_KEY = "pfd_settings_v1";
+var RUN_STORAGE_KEY = "pfd_run_v1";
 
 /* ---------- state ---------- */
 var settings = loadSettings();
@@ -369,6 +370,21 @@ function loadSettings(){
 }
 function saveSettings(){
   try{ localStorage.setItem(STORAGE_KEY, JSON.stringify(settings)); } catch(e){ console.error(e); }
+}
+function saveRunState(){
+  try{
+    if (!currentRun){ localStorage.removeItem(RUN_STORAGE_KEY); return; }
+    localStorage.setItem(RUN_STORAGE_KEY, JSON.stringify({currentRun:currentRun, agentState:agentState, synthesisHistory:synthesisHistory}));
+  } catch(e){ console.error(e); }
+}
+function loadRunState(){
+  try{
+    var raw = localStorage.getItem(RUN_STORAGE_KEY);
+    return raw ? JSON.parse(raw) : null;
+  } catch(e){ return null; }
+}
+function clearRunState(){
+  try{ localStorage.removeItem(RUN_STORAGE_KEY); } catch(e){ console.error(e); }
 }
 
 /* ---------- prompt building ---------- */
@@ -653,6 +669,7 @@ function applyManualPaste(provider){
   renderCard(provider);
   refreshStats();
   refreshSynthesisAvailability();
+  saveRunState();
 }
 function activeAgents(){
   return panelFor(settings.host).map(function(p){
@@ -690,7 +707,7 @@ function refreshSynthesisAvailability(){
 async function runAgent(provider){
   var a = ensureAgentState(provider);
   if (!settings.keys[provider]){
-    a.status = "idle"; a.error = ""; renderCard(provider); return;
+    a.status = "idle"; a.error = ""; renderCard(provider); saveRunState(); return;
   }
   a.status = "pending"; a.error = ""; renderCard(provider);
   try{
@@ -711,6 +728,7 @@ async function runAgent(provider){
   renderCard(provider);
   refreshStats();
   refreshSynthesisAvailability();
+  saveRunState();
 }
 async function runAllAgents(){
   $("btnRunAgents").disabled = true;
@@ -782,6 +800,7 @@ async function runSynthesis(){
     };
     synthesisHistory.push(pass);
     renderSynthesis(pass);
+    saveRunState();
   } catch(err){
     $("synthesisHolder").innerHTML = '<div class="err-text">' + esc(describeError(settings.host, err)) + "</div>";
   }
@@ -1036,9 +1055,40 @@ function onAssemble(){
   renderPanelLayout();
   refreshStats();
   refreshSynthesisAvailability();
+  saveRunState();
 }
 function onClearForm(){
   ["fQuestion","fContext"].forEach(function(id){ $(id).value = ""; });
+  currentRun = null;
+  agentState = {};
+  synthesisHistory = [];
+  clearRunState();
+  $("promptSection").hidden = true;
+  $("panelSection").hidden = true;
+  $("statsSection").hidden = true;
+  $("synthesisSection").hidden = true;
+  $("synthesisHolder").innerHTML = "";
+  $("saveStatus").textContent = "";
+}
+function restoreRunState(){
+  var saved = loadRunState();
+  if (!saved || !saved.currentRun) return;
+  currentRun = saved.currentRun;
+  agentState = saved.agentState || {};
+  synthesisHistory = saved.synthesisHistory || [];
+  Object.keys(agentState).forEach(function(p){
+    if (agentState[p] && agentState[p].status === "pending") agentState[p].status = "idle";
+  });
+  $("fQuestion").value = currentRun.formData.question || "";
+  $("fContext").value = currentRun.formData.context || "";
+  $("promptText").textContent = currentRun.prompt;
+  $("promptSection").hidden = false;
+  renderPanelLayout();
+  refreshStats();
+  refreshSynthesisAvailability();
+  if (synthesisHistory.length){
+    renderSynthesis(synthesisHistory[synthesisHistory.length - 1]);
+  }
 }
 async function onCopyPrompt(){
   if (!currentRun) return;
@@ -1064,6 +1114,7 @@ document.addEventListener("DOMContentLoaded", function(){
   $("btnSaveSettings").addEventListener("click", persistSettingsFromModal);
   $("btnTestGithub").addEventListener("click", function(){ testGithub().catch(function(e){ console.error(e); }); });
   $("settingsModal").addEventListener("click", function(e){ if (e.target === $("settingsModal")) closeSettingsModal(); });
+  restoreRunState();
 });
 
 })();
