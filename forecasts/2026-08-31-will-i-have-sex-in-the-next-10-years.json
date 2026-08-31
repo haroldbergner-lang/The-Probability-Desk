@@ -1,0 +1,143 @@
+{
+  "question": "Will I have sex in the next 10 years.",
+  "context": "I am twenty four years old, healthy, single, and attracted to woman, although I am less horny than same of my friends. That being said I see woman on the street all the time I would want to bang.",
+  "createdAt": "2026-08-31T02:25:53.816Z",
+  "savedAt": "2026-08-31T02:27:58.089Z",
+  "host": "openrouter",
+  "panel": [
+    "gemini",
+    "groq",
+    "mistral",
+    "cohere"
+  ],
+  "agents": {
+    "gemini": {
+      "model": "gemini-3.6-flash",
+      "webSearch": false,
+      "status": "error",
+      "parsed": null,
+      "raw": "",
+      "error": "Gemini 429: {\n  \"error\": {\n    \"code\": 429,\n    \"message\": \"You exceeded your current quota, please check your plan and billing details. For more information on this error, head to: https://ai.google.dev/gemini-api/docs/rate-limits. To monitor your current usage, head to: https://ai.dev/rate-limit. \",\n    \"status\": \"RESOURCE_EXHAUSTED\",\n    \"details\": [\n      {\n        \"@type\": \"type.googleapis.com/google.rpc.Help\",\n        \"links\": [\n          {\n            \"description\": \"Learn more about Gemini API quotas\",\n            \"url\": \"https://ai.google.dev/gemini-api/docs/rate-limits\"\n          }\n        ]\n   "
+    },
+    "openrouter": null,
+    "groq": {
+      "model": "openai/gpt-oss-120b",
+      "webSearch": false,
+      "status": "success",
+      "parsed": {
+        "probability": 0.94,
+        "range_low": 0.9,
+        "range_high": 0.98,
+        "confidence": 0.85,
+        "assumptions": [
+          "The individual remains physically healthy over the next 10 years.",
+          "The social environment continues to allow relatively easy contact with potential partners (e.g., urban or semi‑urban setting).",
+          "Sexual orientation remains heterosexual and attraction to women persists.",
+          "There are no major personal, legal, or cultural restrictions that would prevent consensual sexual activity.",
+          "Desire, even if lower than peers, is sufficient to motivate at least occasional attempts to engage in sex."
+        ],
+        "reasoning": "Recent demographic surveys (e.g., US National Survey of Sexual Health, 2025) show that roughly 85‑90% of adults aged 20‑34 have had at least one consensual sexual encounter. Among single, healthy heterosexual males, the 10‑year cumulative probability of having sex is typically above 90%, because opportunities for casual or partnered sex increase with age, social networking, and dating platforms. The subject’s stated attraction to women and frequent exposure to potential partners further raise the likelihood, while a slightly lower libido may modestly reduce it but not enough to drop the overall estimate below the high‑90% range. Consequently, a point estimate of 94% with a plausible interval from 90% to 98% is appropriate.",
+        "key_driver": "High prevalence of sexual activity among healthy single heterosexual adults in the 20‑34 age range"
+      },
+      "raw": "```json\n{\n  \"probability\": 0.94,\n  \"range_low\": 0.90,\n  \"range_high\": 0.98,\n  \"confidence\": 0.85,\n  \"assumptions\": [\n    \"The individual remains physically healthy over the next 10 years.\",\n    \"The social environment continues to allow relatively easy contact with potential partners (e.g., urban or semi‑urban setting).\",\n    \"Sexual orientation remains heterosexual and attraction to women persists.\",\n    \"There are no major personal, legal, or cultural restrictions that would prevent consensual sexual activity.\",\n    \"Desire, even if lower than peers, is sufficient to motivate at least occasional attempts to engage in sex.\"\n  ],\n  \"reasoning\": \"Recent demographic surveys (e.g., US National Survey of Sexual Health, 2025) show that roughly 85‑90% of adults aged 20‑34 have had at least one consensual sexual encounter. Among single, healthy heterosexual males, the 10‑year cumulative probability of having sex is typically above 90%, because opportunities for casual or partnered sex increase with age, social networking, and dating platforms. The subject’s stated attraction to women and frequent exposure to potential partners further raise the likelihood, while a slightly lower libido may modestly reduce it but not enough to drop the overall estimate below the high‑90% range. Consequently, a point estimate of 94% with a plausible interval from 90% to 98% is appropriate.\",\n  \"key_driver\": \"High prevalence of sexual activity among healthy single heterosexual adults in the 20‑34 age range\"\n}\n```",
+      "error": ""
+    },
+    "mistral": {
+      "model": "mistral-small-latest",
+      "webSearch": false,
+      "status": "success",
+      "parsed": {
+        "probability": 0.95,
+        "range_low": 0.9,
+        "range_high": 0.98,
+        "confidence": 0.9,
+        "assumptions": [
+          "The user is heterosexual and attracted to women.",
+          "The user is in good health with no physical or psychological barriers to sexual activity.",
+          "The user's libido, while lower than peers, is still present and sufficient for sexual activity.",
+          "The user will have opportunities for sexual encounters in the next 10 years.",
+          "The user will not choose celibacy or abstain from sex for personal, religious, or other reasons.",
+          "Societal norms and access to potential partners remain stable or favorable."
+        ],
+        "reasoning": "At 24 years old, the user is in a typical age range for sexual activity, with a high likelihood of experiencing sex at some point in the next decade. While libido is lower than peers, it is still present, and opportunities for sex are likely to arise through social, romantic, or casual encounters. The probability is slightly reduced due to the user's lower libido, but not enough to significantly lower the estimate. Historical and demographic data suggest that the vast majority of people in similar circumstances will have sex within 10 years.",
+        "key_driver": "Opportunity for sexual encounters driven by social and romantic interactions."
+      },
+      "raw": "```json\n{\n  \"probability\": 0.95,\n  \"range_low\": 0.9,\n  \"range_high\": 0.98,\n  \"confidence\": 0.9,\n  \"assumptions\": [\n    \"The user is heterosexual and attracted to women.\",\n    \"The user is in good health with no physical or psychological barriers to sexual activity.\",\n    \"The user's libido, while lower than peers, is still present and sufficient for sexual activity.\",\n    \"The user will have opportunities for sexual encounters in the next 10 years.\",\n    \"The user will not choose celibacy or abstain from sex for personal, religious, or other reasons.\",\n    \"Societal norms and access to potential partners remain stable or favorable.\"\n  ],\n  \"reasoning\": \"At 24 years old, the user is in a typical age range for sexual activity, with a high likelihood of experiencing sex at some point in the next decade. While libido is lower than peers, it is still present, and opportunities for sex are likely to arise through social, romantic, or casual encounters. The probability is slightly reduced due to the user's lower libido, but not enough to significantly lower the estimate. Historical and demographic data suggest that the vast majority of people in similar circumstances will have sex within 10 years.\",\n  \"key_driver\": \"Opportunity for sexual encounters driven by social and romantic interactions.\"\n}\n```",
+      "error": ""
+    },
+    "cohere": {
+      "model": "command-a-plus-05-2026",
+      "webSearch": false,
+      "status": "success",
+      "parsed": {
+        "probability": 0.85,
+        "range_low": 0.7,
+        "range_high": 0.95,
+        "confidence": 0.6,
+        "assumptions": [
+          "The individual remains healthy and without major physical or mental health barriers to sexual activity.",
+          "The individual remains open to sexual relationships and continues to seek them.",
+          "Social and cultural environment remains similar to current norms regarding dating and sexual activity.",
+          "Population-level sexual activity statistics for single men aged 20‑30 are applicable.",
+          "No extreme life circumstances (e.g., incarceration, severe disability) occur within the next 10 years."
+        ],
+        "reasoning": "Based on national surveys (e.g., General Social Survey, National Survey of Sexual Health and Behavior), roughly 80‑90% of single men in their 20s report having had sexual intercourse in the past year. Projecting forward, the cumulative probability of having at least one sexual encounter over a 10‑year span is therefore very high. Adjusting for the individual’s self‑reported lower libido relative to peers, the estimate is slightly reduced from the population baseline, leading to an estimated probability of 0.85.",
+        "key_driver": "Population‑level sexual activity rates for single men in their 20s and early 30s."
+      },
+      "raw": "```json\n{\n  \"probability\": 0.85,\n  \"range_low\": 0.7,\n  \"range_high\": 0.95,\n  \"confidence\": 0.6,\n  \"assumptions\": [\n    \"The individual remains healthy and without major physical or mental health barriers to sexual activity.\",\n    \"The individual remains open to sexual relationships and continues to seek them.\",\n    \"Social and cultural environment remains similar to current norms regarding dating and sexual activity.\",\n    \"Population-level sexual activity statistics for single men aged 20‑30 are applicable.\",\n    \"No extreme life circumstances (e.g., incarceration, severe disability) occur within the next 10 years.\"\n  ],\n  \"reasoning\": \"Based on national surveys (e.g., General Social Survey, National Survey of Sexual Health and Behavior), roughly 80‑90% of single men in their 20s report having had sexual intercourse in the past year. Projecting forward, the cumulative probability of having at least one sexual encounter over a 10‑year span is therefore very high. Adjusting for the individual’s self‑reported lower libido relative to peers, the estimate is slightly reduced from the population baseline, leading to an estimated probability of 0.85.\",\n  \"key_driver\": \"Population‑level sexual activity rates for single men in their 20s and early 30s.\"\n}\n```",
+      "error": ""
+    }
+  },
+  "stats": {
+    "n": 3,
+    "mean": 0.9133333333333332,
+    "median": 0.94,
+    "high": 0.95,
+    "low": 0.85,
+    "spread": 0.09999999999999998,
+    "std": 0.04496912521077346,
+    "label": "Clustered"
+  },
+  "synthesisPasses": [
+    {
+      "timestamp": "2026-08-31T02:26:03.785Z",
+      "host": "openrouter",
+      "hostModel": "openrouter/free",
+      "panel": [
+        "groq",
+        "mistral"
+      ],
+      "mechanicalStats": {
+        "n": 2,
+        "mean": 0.945,
+        "median": 0.945,
+        "high": 0.95,
+        "low": 0.94,
+        "spread": 0.010000000000000009,
+        "std": 0.0050000000000000044,
+        "label": "Clustered"
+      },
+      "raw": "```json\n{\n  \"final_probability\": 0.94,\n  \"range_low\": 0.88,\n  \"range_high\": 0.98,\n  \"confidence\": \"High\",\n  \"key_driver\": \"High baseline prevalence of sexual activity among healthy single heterosexual men in their 20s-30s, combined with stated attraction and frequent exposure to potential partners.\",\n  \"main_disagreement\": \"There is minimal disagreement; both agents converge near 94-95% with overlapping 90-98% ranges. The only minor divergence is the confidence rating (0.85 vs 0.9) and slight framing of how much lower libido should reduce the estimate, but point estimates are nearly identical.\",\n  \"adjustments\": [\n    {\n      \"vs_mechanical_average\": \"-0.005\",\n      \"reason\": \"Panel is tightly clustered (stddev=0.005) with strong agreement on reasoning, warranting minimal downward adjustment to reflect the user-noted lower libido and the residual chance of celibacy/asexuality or unforeseen life events over 10 years.\"\n    },\n    {\n      \"vs_mechanical_average\": \"range widened\",\n      \"reason\": \"Although the panel is tight, a 10-year horizon introduces non-trivial tail risk (injury, psychological barriers, extended singlehood, religious conversion, etc.), so the low end is slightly extended to 0.88 rather than staying at 0.90.\"\n    }\n  ]\n}\n```",
+      "parsed": {
+        "final_probability": 0.94,
+        "range_low": 0.88,
+        "range_high": 0.98,
+        "confidence": "High",
+        "key_driver": "High baseline prevalence of sexual activity among healthy single heterosexual men in their 20s-30s, combined with stated attraction and frequent exposure to potential partners.",
+        "main_disagreement": "There is minimal disagreement; both agents converge near 94-95% with overlapping 90-98% ranges. The only minor divergence is the confidence rating (0.85 vs 0.9) and slight framing of how much lower libido should reduce the estimate, but point estimates are nearly identical.",
+        "adjustments": [
+          {
+            "vs_mechanical_average": "-0.005",
+            "reason": "Panel is tightly clustered (stddev=0.005) with strong agreement on reasoning, warranting minimal downward adjustment to reflect the user-noted lower libido and the residual chance of celibacy/asexuality or unforeseen life events over 10 years."
+          },
+          {
+            "vs_mechanical_average": "range widened",
+            "reason": "Although the panel is tight, a 10-year horizon introduces non-trivial tail risk (injury, psychological barriers, extended singlehood, religious conversion, etc.), so the low end is slightly extended to 0.88 rather than staying at 0.90."
+          }
+        ]
+      },
+      "error": ""
+    }
+  ],
+  "resolution": null
+}
