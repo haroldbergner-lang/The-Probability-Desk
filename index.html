@@ -135,7 +135,12 @@
   .dot-cohere{fill:#059669;}
   .synthesis-result{border:1px solid var(--brand-dim);background:var(--brand-tint);padding:14px;border-radius:10px;margin-top:12px;}
   .synthesis-result h3{margin:0 0 8px;color:var(--brand);font-size:13.5px;}
-  .adj-list{margin:6px 0 0;padding-left:16px;font-size:12px;color:var(--text-dim);}
+  .synthesis-verdict{margin-top:10px;font-size:14px;color:var(--text);}
+  .synthesis-verdict b{color:var(--brand);}
+  .synthesis-block{margin-top:12px;}
+  .synthesis-block > b{display:block;color:var(--text-dim);font-size:11px;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:4px;}
+  .synthesis-block p{margin:0 0 8px;font-size:13px;color:var(--text);line-height:1.6;}
+  .synthesis-block p:last-child{margin-bottom:0;}
   .modal-overlay{position:fixed;inset:0;background:rgba(20,22,30,0.4);display:flex;align-items:flex-start;justify-content:center;padding:30px 14px;z-index:100;overflow:auto;}
   .modal{background:#fff;border:1px solid var(--border);max-width:640px;width:100%;padding:22px;border-radius:12px;box-shadow:0 10px 30px rgba(16,24,40,0.18);}
   .modal h2{margin-top:0;color:var(--text);font-size:15px;}
@@ -466,13 +471,12 @@ function parseSynthesisJSON(text){
   if (final_probability === null) return {ok:false, error:'Missing or invalid "final_probability" field.'};
   var range_low = clamp01(obj.range_low); if (range_low === null) range_low = final_probability;
   var range_high = clamp01(obj.range_high); if (range_high === null) range_high = final_probability;
-  var confidence = obj.confidence;
-  if (typeof confidence !== "string") confidence = "Medium";
-  confidence = /high/i.test(confidence) ? "High" : /low/i.test(confidence) ? "Low" : "Medium";
+  var confidence = typeof obj.confidence === "string" && obj.confidence.trim() ? obj.confidence.trim() : "Medium";
   var key_driver = typeof obj.key_driver === "string" ? obj.key_driver : "";
   var main_disagreement = typeof obj.main_disagreement === "string" ? obj.main_disagreement : "";
-  var adjustments = Array.isArray(obj.adjustments) ? obj.adjustments : [];
-  return {ok:true, parsed:{final_probability:final_probability, range_low:range_low, range_high:range_high, confidence:confidence, key_driver:key_driver, main_disagreement:main_disagreement, adjustments:adjustments}};
+  var reasoning = typeof obj.reasoning === "string" ? obj.reasoning : "";
+  var what_would_change = typeof obj.what_would_change === "string" ? obj.what_would_change : "";
+  return {ok:true, parsed:{final_probability:final_probability, range_low:range_low, range_high:range_high, confidence:confidence, key_driver:key_driver, main_disagreement:main_disagreement, reasoning:reasoning, what_would_change:what_would_change}};
 }
 
 /* ---------- provider calls ---------- */
@@ -741,6 +745,8 @@ function buildSynthesisPrompt(f, agents, stats){
   var lines = [];
   lines.push("You are the host of a multi-agent forecasting panel. You are NOT a forecaster: you must not introduce your own independent probability estimate into this panel. Start from the mechanical average of the panel below. Adjust it only for these stated reasons: agreement vs. disagreement among the agents, the strength of each agent's stated reasoning, and any outliers. Never overweight one agent's estimate without a concrete, stated reason. Widen the uncertainty range when the panel is dispersed; narrow it when the panel is tightly clustered. Raise your confidence rating when the panel is tightly clustered and its reasoning is sound; lower it when the panel is dispersed or the reasoning is weak or vague. Prefer calibrated realism over false precision — never manufacture more precision than the evidence supports, and never proceed without numerical probabilities from at least two agents.");
   lines.push("");
+  lines.push("Write like an analyst briefing a colleague, not a form. In particular, for \"main_disagreement\" and \"reasoning\": if the agents cluster into rough camps (e.g. a low-end group and a high-end group), name the camps by their approximate probability bands and say what each camp is emphasizing — don't just say \"agents disagree.\" In \"reasoning,\" explicitly state how far you're moving from the mechanical average and why, engage with the strongest argument on each side of the disagreement (what's compelling about it, and where it overreaches), and justify your final number as a synthesis of those specific arguments — 2 to 4 paragraphs, not a bullet list. In \"what_would_change\", name the concrete piece of evidence or event that would most shift this estimate if it appeared.");
+  lines.push("");
   lines.push("QUESTION:");
   lines.push(f.question);
   if (f.context){
@@ -766,10 +772,11 @@ function buildSynthesisPrompt(f, agents, stats){
   lines.push('  "final_probability": <number 0-1>,');
   lines.push('  "range_low": <number 0-1>,');
   lines.push('  "range_high": <number 0-1>,');
-  lines.push('  "confidence": "High" | "Medium" | "Low",');
-  lines.push('  "key_driver": "<string>",');
-  lines.push('  "main_disagreement": "<string, what the agents disagree about and why>",');
-  lines.push('  "adjustments": [ { "vs_mechanical_average": "<e.g. +0.05>", "reason": "<reason tied to agreement/disagreement, strength of reasoning, or an outlier>" } ]');
+  lines.push('  "confidence": "<string, e.g. High / Medium-High / Medium / Medium-Low / Low>",');
+  lines.push('  "key_driver": "<string, one sentence naming the single most important factor>",');
+  lines.push('  "main_disagreement": "<string, 2-4 sentences: name the camps by their approximate probability bands and what each is emphasizing>",');
+  lines.push('  "reasoning": "<string, 2-4 paragraphs explaining how far and why you moved from the mechanical average, engaging with the strongest argument on each side>",');
+  lines.push('  "what_would_change": "<string, 1-2 sentences on the concrete evidence or event that would most shift this estimate>"');
   lines.push("}");
   return lines.join("\n");
 }
@@ -810,28 +817,30 @@ function renderSynthesis(pass){
     return;
   }
   var p = pass.parsed;
+  var yesPct = p.final_probability*100;
   html += '<div class="synthesis-result">';
   html += "<h3>Final panel &mdash; hosted by " + esc(PROVIDER_LABEL[pass.host]) + "</h3>";
   html += '<div class="meta-line">Panel composition: ' + pass.panel.map(function(pv){ return esc(PROVIDER_LABEL[pv]); }).join(", ") + "</div>";
   html += '<div class="forecast-grid">';
-  html += '<div class="stat-box"><div class="v">' + (p.final_probability*100).toFixed(1) + '%</div><div class="l">final probability</div></div>';
+  html += '<div class="stat-box"><div class="v">' + yesPct.toFixed(1) + '%</div><div class="l">final probability</div></div>';
   html += '<div class="stat-box"><div class="v">' + (p.range_low*100).toFixed(0) + '-' + (p.range_high*100).toFixed(0) + '%</div><div class="l">range</div></div>';
   html += '<div class="stat-box"><div class="v">' + esc(p.confidence) + '</div><div class="l">confidence</div></div>';
   html += '<div class="stat-box"><div class="v">' + pass.mechanicalStats.mean.toFixed(3) + '</div><div class="l">mechanical avg</div></div>';
   html += "</div>";
+  html += '<div class="synthesis-verdict">Probability Desk estimate: <b>' + yesPct.toFixed(0) + '% YES / ' + (100-yesPct).toFixed(0) + '% NO</b></div>';
   html += '<div class="meta-line"><b>Key driver:</b> ' + esc(p.key_driver) + "</div>";
-  html += '<div class="meta-line"><b>Main disagreement:</b> ' + esc(p.main_disagreement) + "</div>";
-  if (p.adjustments && p.adjustments.length){
-    html += '<div class="meta-line"><b>Adjustments vs. mechanical average:</b></div>';
-    html += '<ul class="adj-list">' + p.adjustments.map(function(adj){
-      return "<li>" + esc(adj.vs_mechanical_average || "") + " &mdash; " + esc(adj.reason || "") + "</li>";
-    }).join("") + "</ul>";
-  } else {
-    html += '<div class="meta-line">No adjustments vs. mechanical average.</div>';
+  html += '<div class="synthesis-block"><b>Main disagreement</b>' + renderParagraphs(p.main_disagreement) + "</div>";
+  html += '<div class="synthesis-block"><b>Reasoning</b>' + renderParagraphs(p.reasoning) + "</div>";
+  if (p.what_would_change){
+    html += '<div class="synthesis-block"><b>What would change this</b>' + renderParagraphs(p.what_would_change) + "</div>";
   }
   html += "</div>";
   $("synthesisHolder").innerHTML = html;
   $("btnSaveForecast").disabled = false;
+}
+function renderParagraphs(text){
+  var parts = String(text || "").split(/\n\s*\n/).map(function(s){ return s.trim(); }).filter(Boolean);
+  return parts.map(function(part){ return "<p>" + esc(part) + "</p>"; }).join("");
 }
 
 /* ---------- host rebalance ---------- */
