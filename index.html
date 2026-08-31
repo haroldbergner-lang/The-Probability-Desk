@@ -225,12 +225,11 @@
 
   <section class="card" id="synthesisSection" hidden>
     <h2>4. Host Synthesis</h2>
-    <p class="small">Requires at least 2 panel forecasts. The host does not add its own probability estimate — it starts from the mechanical average and adjusts for agreement/disagreement, strength of reasoning, and outliers, raising confidence when the panel is tightly clustered and lowering it when dispersed.</p>
+    <p class="small">Runs automatically once at least 2 panel agents have responded. The host does not add its own probability estimate — it starts from the mechanical average and adjusts for agreement/disagreement, strength of reasoning, and outliers, raising confidence when the panel is tightly clustered and lowering it when dispersed.</p>
+    <div id="synthesisHolder"></div>
     <div class="actions">
-      <button id="btnRunSynthesis" type="button" disabled>Run Host Synthesis</button>
       <button id="btnSaveForecast" type="button" disabled>Save Forecast to Repo</button>
     </div>
-    <div id="synthesisHolder"></div>
     <div id="saveStatus" class="hint"></div>
   </section>
 
@@ -303,6 +302,8 @@ var settings = loadSettings();
 var currentRun = null;      // {formData, prompt, createdAt}
 var agentState = {};        // provider -> {status, model, webSearch, raw, parsed, error, manual}
 var synthesisHistory = [];  // array of passes
+var synthesisInFlight = false;
+var lastSynthesizedKey = "";
 
 /* ---------- utils ---------- */
 function esc(s){
@@ -634,7 +635,7 @@ function renderCard(provider){
     html += '<div class="meta-line">Manually pasted &mdash; web search status unknown.</div>';
   }
 
-  if (a.status === "success" && a.parsed){
+  if ((a.status === "success" || a.status === "manual") && a.parsed){
     var p = a.parsed;
     html += '<div class="forecast-grid">';
     html += '<div class="stat-box"><div class="v">' + (p.probability*100).toFixed(1) + '%</div><div class="l">probability</div></div>';
@@ -642,21 +643,11 @@ function renderCard(provider){
     html += '<div class="stat-box"><div class="v">' + (p.confidence !== null ? (p.confidence*100).toFixed(0) + '%' : '—') + '</div><div class="l">confidence</div></div>';
     html += '<div class="stat-box"><div class="v">' + p.assumptions.length + '</div><div class="l">assumptions</div></div>';
     html += "</div>";
-    html += '<div class="meta-line"><b>Key driver:</b> ' + esc(p.key_driver) + "</div>";
+    html += '<details><summary>Reasoning</summary><div class="content"><div class="meta-line"><b>Key driver:</b> ' + esc(p.key_driver) + "</div>";
     if (p.assumptions.length){
       html += '<ul class="assumptions">' + p.assumptions.map(function(x){ return "<li>" + esc(x) + "</li>"; }).join("") + "</ul>";
     }
-    html += '<div class="reasoning">' + esc(p.reasoning) + "</div>";
-  } else if (a.status === "manual" && a.parsed){
-    var pm = a.parsed;
-    html += '<div class="forecast-grid">';
-    html += '<div class="stat-box"><div class="v">' + (pm.probability*100).toFixed(1) + '%</div><div class="l">probability</div></div>';
-    html += '<div class="stat-box"><div class="v">' + (pm.range_low*100).toFixed(0) + '-' + (pm.range_high*100).toFixed(0) + '%</div><div class="l">range</div></div>';
-    html += '<div class="stat-box"><div class="v">' + (pm.confidence !== null ? (pm.confidence*100).toFixed(0) + '%' : '—') + '</div><div class="l">confidence</div></div>';
-    html += '<div class="stat-box"><div class="v">' + pm.assumptions.length + '</div><div class="l">assumptions</div></div>';
-    html += "</div>";
-    html += '<div class="meta-line"><b>Key driver:</b> ' + esc(pm.key_driver) + "</div>";
-    html += '<div class="reasoning">' + esc(pm.reasoning) + "</div>";
+    html += '<div class="reasoning">' + esc(p.reasoning) + "</div></div></details>";
   } else if (a.status === "error"){
     html += '<div class="err-text">' + esc(a.error) + "</div>";
     if (a.raw) html += '<details><summary>Raw response</summary><div class="content"><pre>' + esc(a.raw) + "</pre></div></details>";
@@ -689,6 +680,7 @@ function applyManualPaste(provider){
   renderCard(provider);
   refreshStats();
   refreshSynthesisAvailability();
+  maybeAutoRunSynthesis();
   saveRunState();
 }
 function activeAgents(){
@@ -696,6 +688,22 @@ function activeAgents(){
     var a = agentState[p];
     return a ? Object.assign({provider:p}, a) : null;
   }).filter(function(a){ return a && (a.status === "success" || a.status === "manual") && a.parsed; });
+}
+function activeAgentsKey(agents){
+  return agents.map(function(a){ return a.provider + ":" + a.parsed.probability; }).sort().join("|") + "@" + settings.host;
+}
+function maybeAutoRunSynthesis(){
+  if (synthesisInFlight) return;
+  var agents = activeAgents();
+  if (agents.length < 2) return;
+  if (!settings.keys[settings.host]){
+    $("synthesisHolder").innerHTML = '<div class="err-text">No API key configured for host provider ' + esc(PROVIDER_LABEL[settings.host]) + " &mdash; add one in Settings to get a synthesis.</div>";
+    return;
+  }
+  var key = activeAgentsKey(agents);
+  if (key === lastSynthesizedKey) return;
+  lastSynthesizedKey = key;
+  runSynthesis().catch(function(e){ console.error(e); });
 }
 function refreshStats(){
   var agents = activeAgents();
@@ -718,9 +726,7 @@ function refreshStats(){
   $("dotplotHolder").innerHTML = dotPlotSVG(agents);
 }
 function refreshSynthesisAvailability(){
-  var agents = activeAgents();
   $("synthesisSection").hidden = false;
-  $("btnRunSynthesis").disabled = agents.length < 2;
 }
 
 /* ---------- run orchestration ---------- */
@@ -748,6 +754,7 @@ async function runAgent(provider){
   renderCard(provider);
   refreshStats();
   refreshSynthesisAvailability();
+  maybeAutoRunSynthesis();
   saveRunState();
 }
 async function runAllAgents(){
@@ -796,12 +803,8 @@ function buildSynthesisPrompt(f, agents, stats){
 }
 async function runSynthesis(){
   var agents = activeAgents();
-  if (agents.length < 2){ toast("Need at least 2 panel forecasts before synthesis.", true); return; }
-  if (!settings.keys[settings.host]){
-    $("synthesisHolder").innerHTML = '<div class="err-text">No API key configured for host provider ' + esc(PROVIDER_LABEL[settings.host]) + ".</div>";
-    return;
-  }
-  $("btnRunSynthesis").disabled = true;
+  if (agents.length < 2 || !settings.keys[settings.host]) return;
+  synthesisInFlight = true;
   $("synthesisHolder").innerHTML = '<div class="meta-line">Running host synthesis on ' + esc(PROVIDER_LABEL[settings.host]) + "…</div>";
   var stats = computeStats(agents.map(function(a){ return a.parsed.probability; }));
   var prompt = buildSynthesisPrompt(currentRun.formData, agents, stats);
@@ -824,7 +827,7 @@ async function runSynthesis(){
   } catch(err){
     $("synthesisHolder").innerHTML = '<div class="err-text">' + esc(describeError(settings.host, err)) + "</div>";
   }
-  $("btnRunSynthesis").disabled = false;
+  synthesisInFlight = false;
 }
 function renderSynthesis(pass){
   var html = "";
@@ -882,9 +885,7 @@ async function onHostChange(newHost){
   }
   refreshStats();
   refreshSynthesisAvailability();
-  if (activeAgents().length >= 2){
-    await runSynthesis();
-  }
+  maybeAutoRunSynthesis();
 }
 
 /* ---------- save forecast to repo ---------- */
@@ -1114,6 +1115,7 @@ function onAssemble(){
   currentRun = {formData:f, prompt: buildPrompt(f), createdAt: new Date().toISOString()};
   agentState = {};
   synthesisHistory = [];
+  lastSynthesizedKey = "";
   $("promptText").textContent = currentRun.prompt;
   $("promptSection").hidden = false;
   $("synthesisHolder").innerHTML = "";
@@ -1129,6 +1131,7 @@ function onClearForm(){
   currentRun = null;
   agentState = {};
   synthesisHistory = [];
+  lastSynthesizedKey = "";
   clearRunState();
   $("promptSection").hidden = true;
   $("panelSection").hidden = true;
@@ -1155,6 +1158,9 @@ function restoreRunState(){
   refreshSynthesisAvailability();
   if (synthesisHistory.length){
     renderSynthesis(synthesisHistory[synthesisHistory.length - 1]);
+    lastSynthesizedKey = activeAgentsKey(activeAgents());
+  } else {
+    maybeAutoRunSynthesis();
   }
 }
 async function onCopyPrompt(){
@@ -1174,7 +1180,6 @@ document.addEventListener("DOMContentLoaded", function(){
   $("btnClearForm").addEventListener("click", onClearForm);
   $("btnCopyPrompt").addEventListener("click", onCopyPrompt);
   $("btnRunAgents").addEventListener("click", function(){ runAllAgents().catch(function(e){ console.error(e); }); });
-  $("btnRunSynthesis").addEventListener("click", function(){ runSynthesis().catch(function(e){ console.error(e); }); });
   $("btnSaveForecast").addEventListener("click", function(){ saveForecast().catch(function(e){ console.error(e); }); });
   $("openSettings").addEventListener("click", openSettingsModal);
   $("closeSettings").addEventListener("click", closeSettingsModal);

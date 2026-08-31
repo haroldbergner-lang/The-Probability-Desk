@@ -74,6 +74,15 @@ backend proxy is needed for any of them.
 
 ## Host synthesis rules
 
+Synthesis runs automatically — there's no button. It fires once at least 2
+panel agents have responded (and again if more come in afterward, or if the
+panel changes), so long as the host has a working key; there's nothing to
+click. Individual agent cards show only the numbers (probability, range,
+confidence) by default, with the model's stated reasoning tucked behind a
+collapsed "Reasoning" toggle — the final synthesis panel is where the
+explanatory detail lives (key driver, main disagreement, and every
+adjustment vs. the mechanical average, each with a stated reason).
+
 The host never forecasts — it starts from the mechanical average of the
 panel and adjusts only for stated reasons: agreement vs. disagreement among
 the agents, the strength of each agent's reasoning, and outliers. It never
