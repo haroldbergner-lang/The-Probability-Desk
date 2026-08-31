@@ -80,8 +80,12 @@ panel changes), so long as the host has a working key; there's nothing to
 click. Individual agent cards show only the numbers (probability, range,
 confidence) by default, with the model's stated reasoning tucked behind a
 collapsed "Reasoning" toggle — the final synthesis panel is where the
-explanatory detail lives (key driver, main disagreement, and every
-adjustment vs. the mechanical average, each with a stated reason).
+explanatory depth lives: a "Probability Desk estimate: X% YES / Y% NO"
+verdict line, the key driver, a "main disagreement" that names the
+agents' rough probability camps and what each is emphasizing, a 2-4
+paragraph "reasoning" section that says how far the host moved from the
+mechanical average and engages with the strongest argument on each side,
+and a closing note on what evidence would most shift the estimate.
 
 The host never forecasts — it starts from the mechanical average of the
 panel and adjusts only for stated reasons: agreement vs. disagreement among
