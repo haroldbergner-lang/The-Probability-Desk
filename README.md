@@ -100,7 +100,9 @@ and any synthesis passes) is also persisted to `localStorage`, separately
 from settings, and restored automatically on page reload — so refreshing
 the tab doesn't lose your in-progress forecast. "Clear Form" wipes that
 persisted run along with the form fields, for starting a genuinely new
-forecast.
+forecast. "Reset Everything" in Settings goes further and erases API
+keys, GitHub config, and the current run entirely, back to a blank slate
+(with a confirmation prompt, since it can't be undone).
 
 Any subset of the panel agents can fail (bad key, rate limit, CORS) —
 the rest of the run still completes (`Promise.allSettled`), and every agent

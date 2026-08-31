@@ -268,7 +268,9 @@
 
     <div class="actions" style="margin-top:18px;">
       <button id="btnSaveSettings" type="button">Save Settings</button>
+      <button id="btnResetAll" class="danger" type="button">Reset Everything</button>
     </div>
+    <p class="hint">Reset Everything erases all saved API keys, GitHub settings, and the current run from this browser. Cannot be undone.</p>
   </div>
 </div>
 
@@ -1092,6 +1094,15 @@ function persistSettingsFromModal(){
   toast("Settings saved.", false);
   refreshAllHomeStatus();
 }
+function resetEverything(){
+  var ok = confirm("This will erase all saved API keys, GitHub settings, and your current run from this browser. This cannot be undone. Continue?");
+  if (!ok) return;
+  try{
+    localStorage.removeItem(STORAGE_KEY);
+    localStorage.removeItem(RUN_STORAGE_KEY);
+  } catch(e){ console.error(e); }
+  location.reload();
+}
 
 /* ---------- top-level UI wiring ---------- */
 function onAssemble(){
@@ -1168,6 +1179,7 @@ document.addEventListener("DOMContentLoaded", function(){
   $("openSettings").addEventListener("click", openSettingsModal);
   $("closeSettings").addEventListener("click", closeSettingsModal);
   $("btnSaveSettings").addEventListener("click", persistSettingsFromModal);
+  $("btnResetAll").addEventListener("click", resetEverything);
   $("btnTestGithub").addEventListener("click", function(){ testGithub().catch(function(e){ console.error(e); }); });
   $("settingsModal").addEventListener("click", function(e){ if (e.target === $("settingsModal")) closeSettingsModal(); });
   restoreRunState();
