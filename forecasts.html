@@ -147,6 +147,11 @@ function esc(s){
 function b64EncodeUnicode(str){
   return btoa(encodeURIComponent(str).replace(/%([0-9A-F]{2})/g, function(_, p){ return String.fromCharCode("0x" + p); }));
 }
+function b64DecodeUnicode(str){
+  return decodeURIComponent(atob(str.replace(/\n/g, "")).split("").map(function(c){
+    return "%" + ("00" + c.charCodeAt(0).toString(16)).slice(-2);
+  }).join(""));
+}
 async function safeText(res){ try{ return (await res.text()).slice(0,600); } catch(e){ return ""; } }
 function toast(msg, isError){
   var t = document.createElement("div");
@@ -214,14 +219,17 @@ async function loadForecasts(){
     for (var i = 0; i < files.length; i++){
       var it = files[i];
       try{
-        var fileRes = await fetch(it.download_url, {headers: settings.github.pat ? {"Authorization":"Bearer " + settings.github.pat} : {}});
-        if (!fileRes.ok) continue;
-        var data = await fileRes.json();
+        var fileUrl = "https://api.github.com/repos/" + owner + "/" + repo + "/contents/" + it.path.split("/").map(encodeURIComponent).join("/") + "?ref=" + encodeURIComponent(branch);
+        var fileRes = await fetch(fileUrl, {headers: ghHeaders()});
+        if (!fileRes.ok){ console.error("Failed to load " + it.path, new Error(String(fileRes.status) + ": " + await safeText(fileRes))); continue; }
+        var fileJson = await fileRes.json();
+        var data = JSON.parse(b64DecodeUnicode(fileJson.content));
         loaded.push({path: it.path, sha: it.sha, data: data});
       } catch(e){ console.error("Failed to load " + it.path, e); }
     }
     records = loaded;
-    statusEl.textContent = "Loaded " + records.length + " forecast(s).";
+    var failedCount = files.length - loaded.length;
+    statusEl.textContent = "Loaded " + records.length + " forecast(s)." + (failedCount ? " (" + failedCount + " file(s) failed to load — see console.)" : "");
     renderTable();
   } catch(err){
     statusEl.textContent = "Failed to load: " + (err.message || err);
