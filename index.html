@@ -1005,7 +1005,8 @@ async function refreshHomeStatus(provider){
   dot.className = "status-dot testing"; txt.textContent = "checking…";
   var result = await checkProviderConnection(provider, key, getModel(provider));
   dot.className = "status-dot " + (result.ok ? "ok" : "fail");
-  txt.textContent = result.ok ? "connected" : result.message;
+  txt.textContent = result.ok ? "connected" : truncate(result.message, 24);
+  txt.title = result.ok ? "" : result.message;
 }
 function renderHomeStatusStrip(){
   var holder = $("providerStatusStrip");
