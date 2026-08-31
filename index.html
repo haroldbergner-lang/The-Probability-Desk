@@ -112,7 +112,6 @@
   @keyframes pulse{50%{opacity:0.45;}}
   .badge.success{color:var(--success);border-color:var(--success-dim);background:var(--success-tint);}
   .badge.error{color:var(--danger);border-color:var(--danger-dim);background:var(--danger-tint);}
-  .badge.manual{color:var(--brand);border-color:var(--brand-dim);background:var(--brand-tint);}
   .meta-line{font-size:11.5px;color:var(--text-dim);margin:2px 0;}
   .forecast-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin:10px 0;font-size:11px;}
   @media (max-width:500px){.forecast-grid{grid-template-columns:repeat(2,1fr);}}
@@ -121,8 +120,6 @@
   .stat-box .l{color:var(--text-dim);font-size:9.5px;text-transform:uppercase;letter-spacing:0.3px;}
   .reasoning{font-size:12px;color:var(--text-dim);margin-top:6px;max-height:120px;overflow:auto;border-top:1px dashed var(--border);padding-top:6px;}
   .assumptions{margin:4px 0 0;padding-left:16px;font-size:11.5px;color:var(--text-dim);}
-  .manual-box{margin-top:10px;}
-  .manual-box textarea{min-height:60px;font-size:12px;font-family:var(--font-mono);}
   .err-text{color:var(--danger);font-size:12px;white-space:pre-wrap;word-break:break-word;}
   .stats-strip{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:12px;}
   .stats-strip .stat-box{flex:1;min-width:90px;}
@@ -166,6 +163,7 @@
   <nav>
     <a href="index.html" class="active">Forecast</a>
     <a href="forecasts.html">Log</a>
+    <button id="btnClearForm" class="secondary" type="button">Clear</button>
     <button id="openSettings" class="secondary" type="button">⚙ Settings</button>
   </nav>
 </header>
@@ -190,8 +188,7 @@
     <label for="fContext">Background (optional)</label>
     <textarea id="fContext" placeholder="Any context that might matter..."></textarea>
     <div class="actions">
-      <button id="btnAssemble" type="button">Assemble Prompt</button>
-      <button id="btnClearForm" class="secondary" type="button">Clear Form</button>
+      <button id="btnAssemble" type="button">Run Forecast</button>
     </div>
   </section>
 
@@ -205,9 +202,8 @@
     </details>
     <div class="actions">
       <button id="btnCopyPrompt" class="secondary" type="button">Copy Prompt</button>
-      <button id="btnRunAgents" type="button">Run All Agents</button>
     </div>
-    <p class="hint">Agents with no API key configured are skipped automatically — paste their output manually in the card below once you run it in a chat tab.</p>
+    <p class="hint">Agents with no API key configured are skipped automatically.</p>
   </section>
 
   <section id="panelSection" hidden>
@@ -300,7 +296,7 @@ var RUN_STORAGE_KEY = "pfd_run_v1";
 /* ---------- state ---------- */
 var settings = loadSettings();
 var currentRun = null;      // {formData, prompt, createdAt}
-var agentState = {};        // provider -> {status, model, webSearch, raw, parsed, error, manual}
+var agentState = {};        // provider -> {status, model, webSearch, raw, parsed, error}
 var synthesisHistory = [];  // array of passes
 var synthesisInFlight = false;
 var lastSynthesizedKey = "";
@@ -312,6 +308,7 @@ function esc(s){
   });
 }
 function $(id){ return document.getElementById(id); }
+function truncate(s, n){ s = String(s || ""); var line = s.split("\n")[0]; return line.length > n ? line.slice(0, n) + "…" : line; }
 function clamp01(n){ n = Number(n); if (isNaN(n)) return null; return Math.min(1, Math.max(0, n)); }
 function b64EncodeUnicode(str){
   return btoa(encodeURIComponent(str).replace(/%([0-9A-F]{2})/g, function(_, p){
@@ -327,7 +324,7 @@ function isLikelyCORS(err){
 }
 function describeError(provider, err){
   if (isLikelyCORS(err)){
-    return PROVIDER_LABEL[provider] + " request was blocked before it reached the server — almost certainly a browser CORS/preflight rejection, not an API error. Use manual paste for this agent.";
+    return PROVIDER_LABEL[provider] + " request was blocked before it reached the server — almost certainly a browser CORS/preflight rejection, not an API error.";
   }
   return err && err.message ? err.message : String(err);
 }
@@ -587,7 +584,7 @@ function dotPlotSVG(agents){
 /* ---------- rendering ---------- */
 function ensureAgentState(provider){
   if (!agentState[provider]){
-    agentState[provider] = {status:"idle", model:getModel(provider), webSearch:false, raw:"", parsed:null, error:"", manual:false};
+    agentState[provider] = {status:"idle", model:getModel(provider), webSearch:false, raw:"", parsed:null, error:""};
   }
   return agentState[provider];
 }
@@ -612,7 +609,7 @@ function renderPanelLayout(){
   $("panelSection").hidden = false;
 }
 function badgeHTML(status){
-  var map = {idle:"idle", pending:"running", success:"success", error:"error", manual:"manual"};
+  var map = {idle:"idle", pending:"running", success:"success", error:"error"};
   return '<span class="badge ' + status + '">' + (map[status] || status) + "</span>";
 }
 function providerSearchCapable(provider){
@@ -631,11 +628,9 @@ function renderCard(provider){
   html += '<div class="meta-line">' + (providerSearchCapable(provider) ? "🔎 Live web search enabled" : "📚 No live web search (training data only)") + "</div>";
   if (a.status === "success"){
     html += '<div class="meta-line">Web search used this run: ' + (a.webSearch ? "yes" : "no") + "</div>";
-  } else if (a.manual){
-    html += '<div class="meta-line">Manually pasted &mdash; web search status unknown.</div>';
   }
 
-  if ((a.status === "success" || a.status === "manual") && a.parsed){
+  if (a.status === "success" && a.parsed){
     var p = a.parsed;
     html += '<div class="forecast-grid">';
     html += '<div class="stat-box"><div class="v">' + (p.probability*100).toFixed(1) + '%</div><div class="l">probability</div></div>';
@@ -649,45 +644,21 @@ function renderCard(provider){
     }
     html += '<div class="reasoning">' + esc(p.reasoning) + "</div></div></details>";
   } else if (a.status === "error"){
-    html += '<div class="err-text">' + esc(a.error) + "</div>";
-    if (a.raw) html += '<details><summary>Raw response</summary><div class="content"><pre>' + esc(a.raw) + "</pre></div></details>";
+    html += '<div class="err-text">' + esc(truncate(a.error, 90)) + "</div>";
+    html += '<details><summary>Error details</summary><div class="content"><pre>' + esc(a.error) + (a.raw ? "\n\n" + esc(a.raw) : "") + "</pre></div></details>";
   } else if (a.status === "pending"){
     html += '<div class="meta-line">Calling API…</div>';
   } else {
-    html += '<div class="meta-line">' + (settings.keys[provider] ? "Not run yet." : "No API key configured — paste output manually.") + "</div>";
+    html += '<div class="meta-line">' + (settings.keys[provider] ? "Not run yet." : "No API key configured.") + "</div>";
   }
-
-  html += '<div class="manual-box"><details><summary>Manual paste (override this card)</summary><div class="content">';
-  html += '<textarea id="manual-' + provider + '" placeholder="Paste raw model output or JSON here...">' + esc(a.manual ? a.raw : "") + "</textarea>";
-  html += '<div class="actions"><button type="button" class="secondary" data-manual-submit="' + provider + '">Use pasted JSON</button></div>';
-  html += "</div></details></div>";
 
   el.innerHTML = html;
-  var btn = el.querySelector("[data-manual-submit]");
-  if (btn){
-    btn.addEventListener("click", function(){ applyManualPaste(provider); });
-  }
-}
-function applyManualPaste(provider){
-  var ta = $("manual-" + provider);
-  var text = ta.value;
-  var parsed = parseForecastJSON(text);
-  if (!parsed.ok){
-    agentState[provider] = {status:"error", model:"manual paste", webSearch:false, raw:text, parsed:null, error:parsed.error, manual:true};
-  } else {
-    agentState[provider] = {status:"manual", model:"manual paste", webSearch:false, raw:text, parsed:parsed.parsed, error:"", manual:true};
-  }
-  renderCard(provider);
-  refreshStats();
-  refreshSynthesisAvailability();
-  maybeAutoRunSynthesis();
-  saveRunState();
 }
 function activeAgents(){
   return panelFor(settings.host).map(function(p){
     var a = agentState[p];
     return a ? Object.assign({provider:p}, a) : null;
-  }).filter(function(a){ return a && (a.status === "success" || a.status === "manual") && a.parsed; });
+  }).filter(function(a){ return a && a.status === "success" && a.parsed; });
 }
 function activeAgentsKey(agents){
   return agents.map(function(a){ return a.provider + ":" + a.parsed.probability; }).sort().join("|") + "@" + settings.host;
@@ -745,11 +716,10 @@ async function runAgent(provider){
       webSearch: out.result.webSearch,
       raw: out.result.text,
       parsed: parsed.ok ? parsed.parsed : null,
-      error: parsed.ok ? "" : parsed.error,
-      manual: false
+      error: parsed.ok ? "" : parsed.error
     };
   } catch(err){
-    agentState[provider] = {status:"error", model:getModel(provider), webSearch:false, raw:"", parsed:null, error:describeError(provider, err), manual:false};
+    agentState[provider] = {status:"error", model:getModel(provider), webSearch:false, raw:"", parsed:null, error:describeError(provider, err)};
   }
   renderCard(provider);
   refreshStats();
@@ -758,10 +728,10 @@ async function runAgent(provider){
   saveRunState();
 }
 async function runAllAgents(){
-  $("btnRunAgents").disabled = true;
+  $("btnAssemble").disabled = true;
   var panel = panelFor(settings.host);
   await Promise.allSettled(panel.map(function(p){ return runAgent(p); }));
-  $("btnRunAgents").disabled = false;
+  $("btnAssemble").disabled = false;
 }
 
 /* ---------- synthesis ---------- */
@@ -877,7 +847,7 @@ async function onHostChange(newHost){
   for (var i = 0; i < newPanel.length; i++){
     var p = newPanel[i];
     var st = agentState[p];
-    if (!st || (st.status !== "success" && st.status !== "manual")){
+    if (!st || st.status !== "success"){
       await runAgent(p);
     } else {
       renderCard(p);
@@ -906,7 +876,7 @@ async function saveForecast(){
   PROVIDERS.forEach(function(p){
     var a = agentState[p];
     agentsRecord[p] = a ? {
-      model: a.model, webSearch: !!a.webSearch, status: a.status, manual: !!a.manual,
+      model: a.model, webSearch: !!a.webSearch, status: a.status,
       parsed: a.parsed, raw: a.raw, error: a.error
     } : null;
   });
@@ -1125,6 +1095,7 @@ function onAssemble(){
   refreshStats();
   refreshSynthesisAvailability();
   saveRunState();
+  runAllAgents().catch(function(e){ console.error(e); });
 }
 function onClearForm(){
   ["fQuestion","fContext"].forEach(function(id){ $(id).value = ""; });
@@ -1179,7 +1150,6 @@ document.addEventListener("DOMContentLoaded", function(){
   $("btnAssemble").addEventListener("click", onAssemble);
   $("btnClearForm").addEventListener("click", onClearForm);
   $("btnCopyPrompt").addEventListener("click", onCopyPrompt);
-  $("btnRunAgents").addEventListener("click", function(){ runAllAgents().catch(function(e){ console.error(e); }); });
   $("btnSaveForecast").addEventListener("click", function(){ saveForecast().catch(function(e){ console.error(e); }); });
   $("openSettings").addEventListener("click", openSettingsModal);
   $("closeSettings").addEventListener("click", closeSettingsModal);

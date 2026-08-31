@@ -107,27 +107,27 @@ glance which ones are actually ready without opening Settings.
 The active run (question, background, every agent's status/result, stats,
 and any synthesis passes) is also persisted to `localStorage`, separately
 from settings, and restored automatically on page reload — so refreshing
-the tab doesn't lose your in-progress forecast. "Clear Form" wipes that
-persisted run along with the form fields, for starting a genuinely new
-forecast. "Reset Everything" in Settings goes further and erases API
-keys, GitHub config, and the current run entirely, back to a blank slate
-(with a confirmation prompt, since it can't be undone).
+the tab doesn't lose your in-progress forecast. "Clear," in the header,
+wipes that persisted run along with the form fields, for starting a
+genuinely new forecast. "Reset Everything" in Settings goes further and
+erases API keys, GitHub config, and the current run entirely, back to a
+blank slate (with a confirmation prompt, since it can't be undone).
 
-Any subset of the panel agents can fail (bad key, rate limit, CORS) —
-the rest of the run still completes (`Promise.allSettled`), and every agent
-card has a manual-paste fallback: run that model by hand in a chat tab and
-paste its JSON into the card to have it join the panel identically to an API
-call.
+Any subset of the panel agents can fail (bad key, rate limit, CORS) — the
+rest of the run still completes (`Promise.allSettled`); a failed card shows
+a short one-line error with the full detail behind a collapsed toggle
+rather than a wall of raw JSON. There is no manual-paste fallback — every
+panel agent is a live API call, and the host synthesis fires automatically
+once at least 2 have responded.
 
 ## Forecast log format
 
 `Save Forecast` commits `forecasts/YYYY-MM-DD-slug.json` via the GitHub
 contents API, using a fine-grained, repo-scoped personal access token. Each
 record contains the question, optional background, the host/panel
-composition, every agent's raw and parsed output (including which were
-manually pasted), deterministic stats, every synthesis pass (each stamped
-with its own host and panel), and — once you mark it on `forecasts.html` —
-a resolution.
+composition, every agent's raw and parsed output, deterministic stats,
+every synthesis pass (each stamped with its own host and panel), and —
+once you mark it on `forecasts.html` — a resolution.
 
 ## Local preview
 
