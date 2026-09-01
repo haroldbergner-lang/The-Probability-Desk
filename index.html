@@ -129,7 +129,6 @@
   .dotplot .dotlabel{fill:var(--text-dim);font-size:9px;font-family:var(--font);}
   .dot{fill:var(--brand);stroke:#fff;stroke-width:1.5;opacity:0.95;}
   .dot-openrouter{fill:#0891b2;}
-  .dot-gemini{fill:#7c3aed;}
   .dot-groq{fill:#e11d48;}
   .dot-mistral{fill:#ca8a04;}
   .dot-cohere{fill:#059669;}
@@ -184,7 +183,6 @@
     <h2>1. Ask Your Question</h2>
     <label for="hostSelect">Host (synthesizes the panel — every other provider with a key becomes a panel agent)</label>
     <select id="hostSelect">
-      <option value="gemini">Google Gemini</option>
       <option value="openrouter">OpenRouter</option>
       <option value="groq">Groq</option>
       <option value="mistral">Mistral</option>
@@ -281,17 +279,15 @@
 "use strict";
 
 /* ---------- constants ---------- */
-var PROVIDERS = ["gemini","openrouter","groq","mistral","cohere"];
+var PROVIDERS = ["openrouter","groq","mistral","cohere"];
 var PROVIDER_LABEL = {
-  gemini:"Google Gemini",
   openrouter:"OpenRouter",
   groq:"Groq",
   mistral:"Mistral",
   cohere:"Cohere"
 };
-var PROVIDER_SHORT = {gemini:"GM", openrouter:"OR", groq:"GQ", mistral:"MI", cohere:"CO"};
+var PROVIDER_SHORT = {openrouter:"OR", groq:"GQ", mistral:"MI", cohere:"CO"};
 var DEFAULT_MODELS = {
-  gemini:"gemini-3.6-flash",
   openrouter:"openrouter/free",
   groq:"openai/gpt-oss-120b",
   mistral:"mistral-small-latest",
@@ -357,9 +353,9 @@ window.addEventListener("unhandledrejection", function(e){
 /* ---------- settings persistence ---------- */
 function defaultSettings(){
   return {
-    host:"gemini",
-    keys:{gemini:"",openrouter:"",groq:"",mistral:"",cohere:""},
-    models:{gemini:"",openrouter:"",groq:"",mistral:"",cohere:""},
+    host:"openrouter",
+    keys:{openrouter:"",groq:"",mistral:"",cohere:""},
+    models:{openrouter:"",groq:"",mistral:"",cohere:""},
     openrouterWebPlugin:false,
     github:{pat:"",owner:"",repo:"",branch:"main"}
   };
@@ -480,20 +476,6 @@ function parseSynthesisJSON(text){
 }
 
 /* ---------- provider calls ---------- */
-async function callGemini(prompt, apiKey, model){
-  var url = "https://generativelanguage.googleapis.com/v1beta/models/" + encodeURIComponent(model) + ":generateContent?key=" + encodeURIComponent(apiKey);
-  var res = await fetch(url, {
-    method:"POST",
-    headers:{"content-type":"application/json"},
-    body: JSON.stringify({contents:[{parts:[{text: prompt}]}], tools:[{google_search:{}}]})
-  });
-  if (!res.ok){ throw new Error("Gemini " + res.status + ": " + await safeText(res)); }
-  var data = await res.json();
-  var cand = (data.candidates || [])[0];
-  var text = ((cand && cand.content && cand.content.parts) || []).map(function(p){ return p.text || ""; }).join("\n");
-  var webSearch = !!(cand && cand.groundingMetadata);
-  return {text:text, webSearch:webSearch};
-}
 async function callOpenRouter(prompt, apiKey, model, enableWeb){
   var body = {model: model, messages:[{role:"user", content: prompt}]};
   if (enableWeb) body.plugins = [{id:"web"}];
@@ -546,7 +528,6 @@ async function callCohere(prompt, apiKey, model){
 async function callProviderWithFallback(provider, prompt){
   var key = settings.keys[provider];
   var model = getModel(provider);
-  if (provider === "gemini") return {result: await callGemini(prompt, key, model), model: model};
   if (provider === "openrouter") return {result: await callOpenRouter(prompt, key, model, settings.openrouterWebPlugin), model: model};
   if (provider === "groq") return {result: await callGroq(prompt, key, model), model: model};
   if (provider === "mistral") return {result: await callMistral(prompt, key, model), model: model};
@@ -619,7 +600,6 @@ function badgeHTML(status){
   return '<span class="badge ' + status + '">' + (map[status] || status) + "</span>";
 }
 function providerSearchCapable(provider){
-  if (provider === "gemini") return true;
   if (provider === "openrouter") return !!settings.openrouterWebPlugin;
   if (provider === "groq") return getModel("groq").indexOf("compound") !== -1;
   return false;
@@ -941,7 +921,7 @@ function renderProviderRows(){
         '<div class="top"><span class="name">' + esc(PROVIDER_LABEL[p]) + '</span>' +
         '<span><span class="status-dot" data-dot="' + p + '"></span><span class="small" data-status-text="' + p + '">untested</span></span></div>' +
         '<label>API key</label>' +
-        '<input type="password" data-key="' + p + '" placeholder="' + (p === "gemini" ? "AIza..." : p + " api key") + '" value="' + esc(settings.keys[p]) + '">' +
+        '<input type="password" data-key="' + p + '" placeholder="' + (p + " api key") + '" value="' + esc(settings.keys[p]) + '">' +
         '<label>Model' + (p === "openrouter" ? " (any OpenRouter model id)" : "") + '</label>' +
         '<input type="text" data-model="' + p + '" placeholder="' + esc(DEFAULT_MODELS[p]) + '" value="' + esc(settings.models[p]) + '">' +
         '<div class="field-inline"><button type="button" class="secondary" data-test="' + p + '">Test connection</button></div>' +
@@ -957,13 +937,7 @@ function currentModelInputValue(p){ var el = document.querySelector('[data-model
 async function checkProviderConnection(provider, key, model){
   if (!key) return {ok:false, message:"no key"};
   try{
-    if (provider === "gemini"){
-      var r3 = await fetch("https://generativelanguage.googleapis.com/v1beta/models/" + encodeURIComponent(model) + ":generateContent?key=" + encodeURIComponent(key), {
-        method:"POST", headers:{"content-type":"application/json"},
-        body: JSON.stringify({contents:[{parts:[{text:"hi"}]}]})
-      });
-      if (!r3.ok) throw new Error(String(r3.status) + ": " + await safeText(r3));
-    } else if (provider === "openrouter"){
+    if (provider === "openrouter"){
       var r5 = await fetch("https://openrouter.ai/api/v1/chat/completions", {
         method:"POST", headers:{"content-type":"application/json","Authorization":"Bearer " + key},
         body: JSON.stringify({model:model, messages:[{role:"user", content:"hi"}], max_tokens:8})

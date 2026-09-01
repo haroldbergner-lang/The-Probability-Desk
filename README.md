@@ -22,29 +22,31 @@ Everything lives in two self-contained HTML files.
   forecast, YES/NO resolution marking, and a running Brier score over resolved
   forecasts.
 
-## Five providers, two roles
+## Four providers, two roles
 
-There are five providers — Google Gemini, OpenRouter, Groq, Mistral, and
-Cohere — and exactly two roles: one **host** and the rest **panel agents**.
-Every one of the five was chosen because it can be used for genuinely free,
-no-card API access (see the table below); Anthropic, OpenAI, and xAI were
-deliberately left out because none of them has any free API tier at all.
-SambaNova Cloud was also considered and rejected — it has a generous free
-tier, but its API blocks direct browser calls (no CORS headers on
-preflight), which would require a backend proxy this app doesn't have.
+There are four providers — OpenRouter, Groq, Mistral, and Cohere — and
+exactly two roles: one **host** and the rest **panel agents**. Every one of
+the four was chosen because it can be used for genuinely free, no-card API
+access (see the table below); Anthropic, OpenAI, and xAI were deliberately
+left out because none of them has any free API tier at all. Google Gemini
+was removed after its free tier proved too rate-limited in practice (429
+RESOURCE_EXHAUSTED errors on the default model). SambaNova Cloud was also
+considered and rejected — it has a generous free tier, but its API blocks
+direct browser calls (no CORS headers on preflight), which would require a
+backend proxy this app doesn't have.
 
 The host is chosen with a dropdown right on the main page, next to the
 question form; every other provider that has a key configured automatically
-becomes a panel agent (providers without a key sit idle for manual paste —
-see below). The host never forecasts, and switching hosts mid-session
+becomes a panel agent (providers without a key configured just sit idle).
+The host never forecasts, and switching hosts mid-session
 rebalances the panel (the new host's forecast comes out of the active panel,
 the old host joins the panel and its agent call runs, and synthesis
 re-runs). Nothing is ever discarded — every agent result and every synthesis
 pass is kept in the saved record, tagged with the host/panel composition
 that produced it.
 
-Default host is Google Gemini, so the default panel is OpenRouter, Groq,
-Mistral, and Cohere.
+Default host is OpenRouter, so the default panel is Groq, Mistral, and
+Cohere.
 
 Model IDs move fast, so every provider's model is editable in Settings; the
 shipped defaults (current as of August 2026) are chosen to be free out of
@@ -52,23 +54,22 @@ the box:
 
 | Provider | Default model | Free tier? |
 |---|---|---|
-| Google Gemini | `gemini-3.6-flash` | Yes — Flash models are free via Google AI Studio, no card. (The Pro model is not; don't switch to it unless you're willing to pay.) |
 | OpenRouter | `openrouter/free` | Yes — no card. This is OpenRouter's own router alias that auto-selects among whatever `:free` models are currently available, so it doesn't go stale the way a specific `:free` model ID does. |
 | Groq | `openai/gpt-oss-120b` | Yes — no card, ~30 req/min, 14,400 req/day. (Their Qwen models are "preview" and can be pulled without notice — avoid pinning to one as a default.) |
 | Mistral | `mistral-small-latest` | Yes — "Experiment" tier, no card, ~1B tokens/month. (Mistral Large requires their paid Scale plan — Small is what's actually free.) |
 | Cohere | `command-a-plus-05-2026` | Yes — no card, but a "trial" key capped at 1,000 calls/month across all endpoints. Fine for occasional personal use; not meant for heavy use. |
 
-None of these five make outbound web-search calls by default. Only Google
-Gemini has always-on live search; the other four are answering purely from
-training data unless you deliberately enable a paid search add-on (none of
-which are free): OpenRouter's "web" plugin toggle in Settings (~$0.007–
-$0.015/search) or setting Groq's model to `groq/compound` (~$0.005–$0.008/
-search). Every agent card shows a "🔎 Live web search enabled" or "📚 No
-live web search" badge reflecting the current configuration, so it's always
-visible at a glance which agents can actually look things up.
+None of these four make outbound web-search calls by default — every one is
+answering purely from training data unless you deliberately enable a paid
+search add-on (none of which are free): OpenRouter's "web" plugin toggle in
+Settings (~$0.007–$0.015/search) or setting Groq's model to `groq/compound`
+(~$0.005–$0.008/search). Every agent card shows a "🔎 Live web search
+enabled" or "📚 No live web search" badge reflecting the current
+configuration, so it's always visible at a glance which agents can actually
+look things up.
 
 CORS (calling each API directly from the browser) has been verified for all
-five via preflight `OPTIONS` requests — every one returns an
+four via preflight `OPTIONS` requests — every one returns an
 `Access-Control-Allow-Origin` header permitting a browser call, so no
 backend proxy is needed for any of them.
 
