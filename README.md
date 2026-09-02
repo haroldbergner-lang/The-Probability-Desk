@@ -22,18 +22,24 @@ Everything lives in two self-contained HTML files.
   forecast, YES/NO resolution marking, and a running Brier score over resolved
   forecasts.
 
-## Four providers, two roles
+## Five providers, two roles
 
-There are four providers — OpenRouter, Groq, Mistral, and Cohere — and
-exactly two roles: one **host** and the rest **panel agents**. Every one of
-the four was chosen because it can be used for genuinely free, no-card API
-access (see the table below); Anthropic, OpenAI, and xAI were deliberately
-left out because none of them has any free API tier at all. Google Gemini
-was removed after its free tier proved too rate-limited in practice (429
-RESOURCE_EXHAUSTED errors on the default model). SambaNova Cloud was also
-considered and rejected — it has a generous free tier, but its API blocks
-direct browser calls (no CORS headers on preflight), which would require a
-backend proxy this app doesn't have.
+There are five providers — OpenRouter, Groq, Mistral, Cohere, and Hugging
+Face — and exactly two roles: one **host** and the rest **panel agents**.
+Every one of the five was chosen because it can be used for genuinely free,
+no-card API access (see the table below); Anthropic, OpenAI, and xAI were
+deliberately left out because none of them has any free API tier at all.
+Google Gemini was removed after its free tier proved too rate-limited in
+practice (429 RESOURCE_EXHAUSTED errors on the default model). SambaNova
+Cloud, NVIDIA NIM, Cloudflare Workers AI, and GitHub Models were also
+considered and rejected — none of them returns an
+`Access-Control-Allow-Origin` header on a CORS preflight, which would
+require a backend proxy this app doesn't have. Cerebras, Together AI,
+DeepInfra, Hyperbolic, Novita, and SiliconFlow all pass CORS but were
+rejected too — each either requires a credit card outright (DeepInfra;
+Cerebras did too, after moving off its old no-card free tier in July 2026)
+or only offers a one-time trial credit rather than an ongoing free
+allowance.
 
 The host is chosen with a dropdown right on the main page, next to the
 question form; every other provider that has a key configured automatically
@@ -45,11 +51,11 @@ re-runs). Nothing is ever discarded — every agent result and every synthesis
 pass is kept in the saved record, tagged with the host/panel composition
 that produced it.
 
-Default host is OpenRouter, so the default panel is Groq, Mistral, and
-Cohere.
+Default host is OpenRouter, so the default panel is Groq, Mistral, Cohere,
+and Hugging Face.
 
 Model IDs move fast, so every provider's model is editable in Settings; the
-shipped defaults (current as of August 2026) are chosen to be free out of
+shipped defaults (current as of September 2026) are chosen to be free out of
 the box:
 
 | Provider | Default model | Free tier? |
@@ -58,12 +64,13 @@ the box:
 | Groq | `openai/gpt-oss-120b` | Yes — no card, ~30 req/min, 14,400 req/day. (Their Qwen models are "preview" and can be pulled without notice — avoid pinning to one as a default.) |
 | Mistral | `mistral-small-latest` | Yes — "Experiment" tier, no card, ~1B tokens/month. (Mistral Large requires their paid Scale plan — Small is what's actually free.) |
 | Cohere | `command-a-plus-05-2026` | Yes — no card, but a "trial" key capped at 1,000 calls/month across all endpoints. Fine for occasional personal use; not meant for heavy use. |
+| Hugging Face | `deepseek-ai/DeepSeek-V3-0324` | Yes — no card. Every account gets $0.10 in Inference Providers credit that renews every month; with a cheap model like the default, that's roughly a few hundred calls/month — plenty for personal use, but pick a pricier model and it won't stretch nearly as far. |
 
-None of these four make outbound web-search calls — every one answers
+None of these five make outbound web-search calls — every one answers
 purely from training data.
 
 CORS (calling each API directly from the browser) has been verified for all
-four via preflight `OPTIONS` requests — every one returns an
+five via preflight `OPTIONS` requests — every one returns an
 `Access-Control-Allow-Origin` header permitting a browser call, so no
 backend proxy is needed for any of them.
 
