@@ -132,6 +132,7 @@
   .dot-groq{fill:#e11d48;}
   .dot-mistral{fill:#ca8a04;}
   .dot-cohere{fill:#059669;}
+  .dot-huggingface{fill:#f59e0b;}
   .synthesis-result{border:1px solid var(--brand-dim);background:var(--brand-tint);padding:14px;border-radius:10px;margin-top:12px;}
   .synthesis-result h3{margin:0 0 8px;color:var(--brand);font-size:13.5px;}
   .synthesis-verdict{margin-top:10px;font-size:14px;color:var(--text);}
@@ -185,6 +186,7 @@
       <option value="groq">Groq</option>
       <option value="mistral">Mistral</option>
       <option value="cohere">Cohere</option>
+      <option value="huggingface">Hugging Face</option>
     </select>
     <label for="fQuestion">Question</label>
     <input type="text" id="fQuestion" placeholder="e.g. Will I be married by 30? Will she text me back?">
@@ -272,19 +274,21 @@
 "use strict";
 
 /* ---------- constants ---------- */
-var PROVIDERS = ["openrouter","groq","mistral","cohere"];
+var PROVIDERS = ["openrouter","groq","mistral","cohere","huggingface"];
 var PROVIDER_LABEL = {
   openrouter:"OpenRouter",
   groq:"Groq",
   mistral:"Mistral",
-  cohere:"Cohere"
+  cohere:"Cohere",
+  huggingface:"Hugging Face"
 };
-var PROVIDER_SHORT = {openrouter:"OR", groq:"GQ", mistral:"MI", cohere:"CO"};
+var PROVIDER_SHORT = {openrouter:"OR", groq:"GQ", mistral:"MI", cohere:"CO", huggingface:"HF"};
 var DEFAULT_MODELS = {
   openrouter:"openrouter/free",
   groq:"openai/gpt-oss-120b",
   mistral:"mistral-small-latest",
-  cohere:"command-a-plus-05-2026"
+  cohere:"command-a-plus-05-2026",
+  huggingface:"deepseek-ai/DeepSeek-V3-0324"
 };
 var STORAGE_KEY = "pfd_settings_v1";
 var RUN_STORAGE_KEY = "pfd_run_v1";
@@ -347,8 +351,8 @@ window.addEventListener("unhandledrejection", function(e){
 function defaultSettings(){
   return {
     host:"openrouter",
-    keys:{openrouter:"",groq:"",mistral:"",cohere:""},
-    models:{openrouter:"",groq:"",mistral:"",cohere:""},
+    keys:{openrouter:"",groq:"",mistral:"",cohere:"",huggingface:""},
+    models:{openrouter:"",groq:"",mistral:"",cohere:"",huggingface:""},
     github:{pat:"",owner:"",repo:"",branch:"main"}
   };
 }
@@ -513,6 +517,17 @@ async function callCohere(prompt, apiKey, model){
   var text = content.filter(function(b){ return b.type === "text"; }).map(function(b){ return b.text; }).join("\n");
   return {text:text};
 }
+async function callHuggingFace(prompt, apiKey, model){
+  var res = await fetch("https://router.huggingface.co/v1/chat/completions", {
+    method:"POST",
+    headers:{"content-type":"application/json","Authorization":"Bearer " + apiKey},
+    body: JSON.stringify({model: model, messages:[{role:"user", content: prompt}]})
+  });
+  if (!res.ok){ throw new Error("Hugging Face " + res.status + ": " + await safeText(res)); }
+  var data = await res.json();
+  var text = (data.choices && data.choices[0] && data.choices[0].message && data.choices[0].message.content) || "";
+  return {text:text};
+}
 async function callProviderWithFallback(provider, prompt){
   var key = settings.keys[provider];
   var model = getModel(provider);
@@ -520,6 +535,7 @@ async function callProviderWithFallback(provider, prompt){
   if (provider === "groq") return {result: await callGroq(prompt, key, model), model: model};
   if (provider === "mistral") return {result: await callMistral(prompt, key, model), model: model};
   if (provider === "cohere") return {result: await callCohere(prompt, key, model), model: model};
+  if (provider === "huggingface") return {result: await callHuggingFace(prompt, key, model), model: model};
   throw new Error("Unknown provider " + provider);
 }
 
@@ -895,7 +911,7 @@ function renderProviderRows(){
         '<span><span class="status-dot" data-dot="' + p + '"></span><span class="small" data-status-text="' + p + '">untested</span></span></div>' +
         '<label>API key</label>' +
         '<input type="password" data-key="' + p + '" placeholder="' + (p + " api key") + '" value="' + esc(settings.keys[p]) + '">' +
-        '<label>Model' + (p === "openrouter" ? " (any OpenRouter model id)" : "") + '</label>' +
+        '<label>Model' + (p === "openrouter" ? " (any OpenRouter model id)" : p === "huggingface" ? " (any Hugging Face router model id)" : "") + '</label>' +
         '<input type="text" data-model="' + p + '" placeholder="' + esc(DEFAULT_MODELS[p]) + '" value="' + esc(settings.models[p]) + '">' +
         '<div class="field-inline"><button type="button" class="secondary" data-test="' + p + '">Test connection</button></div>' +
       '</div>';
@@ -933,6 +949,12 @@ async function checkProviderConnection(provider, key, model){
         body: JSON.stringify({model:model, messages:[{role:"user", content:"hi"}]})
       });
       if (!r8.ok) throw new Error(String(r8.status) + ": " + await safeText(r8));
+    } else if (provider === "huggingface"){
+      var r9 = await fetch("https://router.huggingface.co/v1/chat/completions", {
+        method:"POST", headers:{"content-type":"application/json","Authorization":"Bearer " + key},
+        body: JSON.stringify({model:model, messages:[{role:"user", content:"hi"}], max_tokens:8})
+      });
+      if (!r9.ok) throw new Error(String(r9.status) + ": " + await safeText(r9));
     }
     return {ok:true, message:"connected"};
   } catch(err){
