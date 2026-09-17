@@ -168,7 +168,7 @@
     <button id="btnClearForm" class="secondary" type="button">Clear</button>
   </div>
   <nav>
-    <a href="forecasts.html">Log</a>
+    <a href="forecasts.html" id="navLog">Log</a>
     <button id="openSettings" class="secondary" type="button">⚙ Settings</button>
   </nav>
 </header>
@@ -1168,6 +1168,7 @@ document.addEventListener("DOMContentLoaded", function(){
   $("btnTestGithub").addEventListener("click", function(){ testGithub().catch(function(e){ console.error(e); }); });
   $("settingsModal").addEventListener("click", function(e){ if (e.target === $("settingsModal")) closeSettingsModal(); });
   $("btnCheckStatus").addEventListener("click", checkAllHomeStatus);
+  $("navLog").addEventListener("click", onClearForm);
   restoreRunState();
   renderHomeStatusStrip();
 });
