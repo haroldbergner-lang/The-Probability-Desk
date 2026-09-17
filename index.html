@@ -320,6 +320,21 @@ async function safeText(res){
   try { return (await res.text()).slice(0, 600); } catch(e){ return ""; }
 }
 function sleep(ms){ return new Promise(function(resolve){ setTimeout(resolve, ms); }); }
+async function fetchWithTimeout(url, options, timeoutMs){
+  var controller = new AbortController();
+  var timer = setTimeout(function(){ controller.abort(); }, timeoutMs);
+  var merged = {};
+  for (var k in options){ merged[k] = options[k]; }
+  merged.signal = controller.signal;
+  try{
+    return await fetch(url, merged);
+  } catch(err){
+    if (err.name === "AbortError") throw new Error("timed out after " + (timeoutMs/1000) + "s with no response");
+    throw err;
+  } finally {
+    clearTimeout(timer);
+  }
+}
 async function fetchWithRetry(url, options, maxRetries){
   maxRetries = maxRetries === undefined ? 2 : maxRetries;
   var attempt = 0;
@@ -944,34 +959,34 @@ async function checkProviderConnection(provider, key, model){
   if (!key) return {ok:false, message:"no key"};
   try{
     if (provider === "openrouter"){
-      var r5 = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+      var r5 = await fetchWithTimeout("https://openrouter.ai/api/v1/chat/completions", {
         method:"POST", headers:{"content-type":"application/json","Authorization":"Bearer " + key},
         body: JSON.stringify({model:model, messages:[{role:"user", content:"hi"}], max_tokens:8})
-      });
+      }, 15000);
       if (!r5.ok) throw new Error(String(r5.status) + ": " + await safeText(r5));
     } else if (provider === "groq"){
-      var r6 = await fetch("https://api.groq.com/openai/v1/chat/completions", {
+      var r6 = await fetchWithTimeout("https://api.groq.com/openai/v1/chat/completions", {
         method:"POST", headers:{"content-type":"application/json","Authorization":"Bearer " + key},
         body: JSON.stringify({model:model, messages:[{role:"user", content:"hi"}], max_tokens:8})
-      });
+      }, 15000);
       if (!r6.ok) throw new Error(String(r6.status) + ": " + await safeText(r6));
     } else if (provider === "mistral"){
-      var r7 = await fetch("https://api.mistral.ai/v1/chat/completions", {
+      var r7 = await fetchWithTimeout("https://api.mistral.ai/v1/chat/completions", {
         method:"POST", headers:{"content-type":"application/json","Authorization":"Bearer " + key},
         body: JSON.stringify({model:model, messages:[{role:"user", content:"hi"}], max_tokens:8})
-      });
+      }, 15000);
       if (!r7.ok) throw new Error(String(r7.status) + ": " + await safeText(r7));
     } else if (provider === "cohere"){
-      var r8 = await fetch("https://api.cohere.com/v2/chat", {
+      var r8 = await fetchWithTimeout("https://api.cohere.com/v2/chat", {
         method:"POST", headers:{"content-type":"application/json","Authorization":"Bearer " + key},
         body: JSON.stringify({model:model, messages:[{role:"user", content:"hi"}]})
-      });
+      }, 15000);
       if (!r8.ok) throw new Error(String(r8.status) + ": " + await safeText(r8));
     } else if (provider === "huggingface"){
-      var r9 = await fetch("https://router.huggingface.co/v1/chat/completions", {
+      var r9 = await fetchWithTimeout("https://router.huggingface.co/v1/chat/completions", {
         method:"POST", headers:{"content-type":"application/json","Authorization":"Bearer " + key},
         body: JSON.stringify({model:model, messages:[{role:"user", content:"hi"}], max_tokens:8})
-      });
+      }, 15000);
       if (!r9.ok) throw new Error(String(r9.status) + ": " + await safeText(r9));
     }
     return {ok:true, message:"connected"};
