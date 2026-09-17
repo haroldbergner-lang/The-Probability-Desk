@@ -177,6 +177,7 @@
   <p class="intro">Ask any question with a genuinely uncertain outcome — big or small, personal or public. One standardized prompt goes to several independent AI models in parallel; a host synthesizes their answers into a single probability.</p>
 
   <div class="provider-status-row" id="providerStatusStrip"></div>
+  <div class="field-inline"><button type="button" class="secondary" id="btnCheckStatus">Check provider status</button></div>
 
   <section class="card">
     <h2>1. Ask Your Question</h2>
@@ -318,6 +319,19 @@ function b64EncodeUnicode(str){
 async function safeText(res){
   try { return (await res.text()).slice(0, 600); } catch(e){ return ""; }
 }
+function sleep(ms){ return new Promise(function(resolve){ setTimeout(resolve, ms); }); }
+async function fetchWithRetry(url, options, maxRetries){
+  maxRetries = maxRetries === undefined ? 2 : maxRetries;
+  var attempt = 0;
+  for (;;){
+    var res = await fetch(url, options);
+    if (res.status !== 429 || attempt >= maxRetries) return res;
+    var retryAfter = Number(res.headers.get("retry-after"));
+    var waitMs = retryAfter > 0 ? retryAfter * 1000 : Math.pow(2, attempt) * 1000;
+    await sleep(waitMs);
+    attempt++;
+  }
+}
 function isLikelyCORS(err){
   var m = (err && err.message) || "";
   return err instanceof TypeError && /fetch|network|load failed/i.test(m);
@@ -326,7 +340,11 @@ function describeError(provider, err){
   if (isLikelyCORS(err)){
     return PROVIDER_LABEL[provider] + " request was blocked before it reached the server — almost certainly a browser CORS/preflight rejection, not an API error.";
   }
-  return err && err.message ? err.message : String(err);
+  var m = err && err.message ? err.message : String(err);
+  if (/ 429:/.test(m)){
+    return PROVIDER_LABEL[provider] + " is still rate-limited after retrying — " + m;
+  }
+  return m;
 }
 function slugify(q){
   var s = String(q || "").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-+|-+$)/g, "");
@@ -472,7 +490,7 @@ function parseSynthesisJSON(text){
 
 /* ---------- provider calls ---------- */
 async function callOpenRouter(prompt, apiKey, model){
-  var res = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+  var res = await fetchWithRetry("https://openrouter.ai/api/v1/chat/completions", {
     method:"POST",
     headers:{"content-type":"application/json","Authorization":"Bearer " + apiKey},
     body: JSON.stringify({model: model, messages:[{role:"user", content: prompt}]})
@@ -483,7 +501,7 @@ async function callOpenRouter(prompt, apiKey, model){
   return {text:text};
 }
 async function callGroq(prompt, apiKey, model){
-  var res = await fetch("https://api.groq.com/openai/v1/chat/completions", {
+  var res = await fetchWithRetry("https://api.groq.com/openai/v1/chat/completions", {
     method:"POST",
     headers:{"content-type":"application/json","Authorization":"Bearer " + apiKey},
     body: JSON.stringify({model: model, messages:[{role:"user", content: prompt}]})
@@ -495,7 +513,7 @@ async function callGroq(prompt, apiKey, model){
   return {text:text};
 }
 async function callMistral(prompt, apiKey, model){
-  var res = await fetch("https://api.mistral.ai/v1/chat/completions", {
+  var res = await fetchWithRetry("https://api.mistral.ai/v1/chat/completions", {
     method:"POST",
     headers:{"content-type":"application/json","Authorization":"Bearer " + apiKey},
     body: JSON.stringify({model: model, messages:[{role:"user", content: prompt}]})
@@ -506,7 +524,7 @@ async function callMistral(prompt, apiKey, model){
   return {text:text};
 }
 async function callCohere(prompt, apiKey, model){
-  var res = await fetch("https://api.cohere.com/v2/chat", {
+  var res = await fetchWithRetry("https://api.cohere.com/v2/chat", {
     method:"POST",
     headers:{"content-type":"application/json","Authorization":"Bearer " + apiKey},
     body: JSON.stringify({model: model, messages:[{role:"user", content: prompt}]})
@@ -518,7 +536,7 @@ async function callCohere(prompt, apiKey, model){
   return {text:text};
 }
 async function callHuggingFace(prompt, apiKey, model){
-  var res = await fetch("https://router.huggingface.co/v1/chat/completions", {
+  var res = await fetchWithRetry("https://router.huggingface.co/v1/chat/completions", {
     method:"POST",
     headers:{"content-type":"application/json","Authorization":"Bearer " + apiKey},
     body: JSON.stringify({model: model, messages:[{role:"user", content: prompt}]})
@@ -992,12 +1010,11 @@ function renderHomeStatusStrip(){
     return '<div class="provider-status-chip">' +
       '<span class="status-dot" data-home-dot="' + p + '"></span>' +
       '<span>' + esc(PROVIDER_LABEL[p]) + '</span>' +
-      '<span class="small" data-home-text="' + p + '">' + (settings.keys[p] ? "checking…" : "no key") + '</span>' +
+      '<span class="small" data-home-text="' + p + '">' + (settings.keys[p] ? "key saved" : "no key") + '</span>' +
     '</div>';
   }).join("");
 }
-function refreshAllHomeStatus(){
-  renderHomeStatusStrip();
+function checkAllHomeStatus(){
   PROVIDERS.forEach(function(p){
     if (settings.keys[p]) refreshHomeStatus(p).catch(function(e){ console.error(e); });
   });
@@ -1041,7 +1058,7 @@ function persistSettingsFromModal(){
   saveSettings();
   closeSettingsModal();
   toast("Settings saved.", false);
-  refreshAllHomeStatus();
+  renderHomeStatusStrip();
 }
 function resetEverything(){
   var ok = confirm("This will erase all saved API keys, GitHub settings, and your current run from this browser. This cannot be undone. Continue?");
@@ -1135,8 +1152,9 @@ document.addEventListener("DOMContentLoaded", function(){
   $("btnResetAll").addEventListener("click", resetEverything);
   $("btnTestGithub").addEventListener("click", function(){ testGithub().catch(function(e){ console.error(e); }); });
   $("settingsModal").addEventListener("click", function(e){ if (e.target === $("settingsModal")) closeSettingsModal(); });
+  $("btnCheckStatus").addEventListener("click", checkAllHomeStatus);
   restoreRunState();
-  refreshAllHomeStatus();
+  renderHomeStatusStrip();
 });
 
 })();
