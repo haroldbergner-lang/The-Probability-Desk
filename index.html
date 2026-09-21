@@ -991,7 +991,7 @@ async function checkProviderConnection(provider, key, model){
     }
     return {ok:true, message:"connected"};
   } catch(err){
-    return {ok:false, message: isLikelyCORS(err) ? "blocked (CORS?)" : "failed: " + (err.message || err).toString().slice(0,80)};
+    return {ok:false, message: isLikelyCORS(err) ? "blocked (CORS?)" : "failed: " + (err.message || err).toString()};
   }
 }
 async function testConnection(provider){
@@ -1016,7 +1016,12 @@ async function refreshHomeStatus(provider){
   var result = await checkProviderConnection(provider, key, getModel(provider));
   dot.className = "status-dot " + (result.ok ? "ok" : "fail");
   txt.textContent = result.ok ? "connected" : truncate(result.message, 24);
-  txt.title = result.ok ? "" : result.message;
+  txt.title = result.ok ? "" : result.message + " (click to view full error)";
+  txt.style.cursor = result.ok ? "" : "pointer";
+  txt.onclick = result.ok ? null : function(){
+    console.error(PROVIDER_LABEL[provider] + " status check failed:", result.message);
+    window.alert(PROVIDER_LABEL[provider] + " error:\n\n" + result.message);
+  };
 }
 function renderHomeStatusStrip(){
   var holder = $("providerStatusStrip");
