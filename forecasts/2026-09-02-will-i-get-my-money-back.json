@@ -139,5 +139,8 @@
       "error": ""
     }
   ],
-  "resolution": null
+  "resolution": {
+    "outcome": "NO",
+    "resolvedAt": "2026-09-22T02:08:55.587Z"
+  }
 }
