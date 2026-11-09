@@ -132,9 +132,9 @@
   .dot{fill:var(--brand);stroke:#fff;stroke-width:1.5;opacity:0.95;}
   .dot-openrouter{fill:#0891b2;}
   .dot-groq{fill:#e11d48;}
-  .dot-mistral{fill:#ca8a04;}
+  .dot-gemma{fill:#ca8a04;}
   .dot-cohere{fill:#059669;}
-  .dot-huggingface{fill:#f59e0b;}
+  .dot-nemotron{fill:#f59e0b;}
   .synthesis-result{border:1px solid var(--brand-dim);background:var(--brand-tint);padding:14px;border-radius:10px;margin-top:12px;}
   .synthesis-result h3{margin:0 0 8px;color:var(--brand);font-size:13.5px;}
   .synthesis-verdict{margin-top:10px;font-size:14px;color:var(--text);}
@@ -183,13 +183,11 @@
 
   <section class="card">
     <h2>1. Ask Your Question</h2>
-    <label for="hostSelect">Host (synthesizes the panel — every other provider with a key becomes a panel agent)</label>
+    <label for="hostSelect">Host (synthesizes the panel — enabled models with access join the panel)</label>
     <select id="hostSelect">
       <option value="openrouter">OpenRouter</option>
       <option value="groq">Groq</option>
-      <option value="mistral">Mistral</option>
       <option value="cohere">Cohere</option>
-      <option value="huggingface">Hugging Face</option>
     </select>
     <label for="fQuestion">Question</label>
     <input type="text" id="fQuestion" placeholder="e.g. Will I be married by 30? Will she text me back?">
@@ -211,7 +209,7 @@
     <div class="actions">
       <button id="btnCopyPrompt" class="secondary" type="button">Copy Prompt</button>
     </div>
-    <p class="hint">Agents with no API key configured are skipped automatically.</p>
+    <p class="hint">Disabled agents and agents without API access are skipped automatically.</p>
   </section>
 
   <section id="panelSection" hidden>
@@ -277,21 +275,24 @@
 "use strict";
 
 /* ---------- constants ---------- */
-var PROVIDERS = ["openrouter","groq","mistral","cohere","huggingface"];
+var PROVIDERS = ["openrouter","groq","gemma","cohere","nemotron"];
+var HOST_PROVIDERS = ["openrouter","groq","cohere"];
 var PROVIDER_LABEL = {
   openrouter:"OpenRouter",
   groq:"Groq",
   mistral:"Mistral",
+  gemma:"Google Gemma 4",
   cohere:"Cohere",
-  huggingface:"Hugging Face"
+  huggingface:"Hugging Face",
+  nemotron:"NVIDIA Nemotron 3 Ultra"
 };
-var PROVIDER_SHORT = {openrouter:"OR", groq:"GQ", mistral:"MI", cohere:"CO", huggingface:"HF"};
+var PROVIDER_SHORT = {openrouter:"OR", groq:"GQ", gemma:"GE", cohere:"CO", nemotron:"NV"};
 var DEFAULT_MODELS = {
   openrouter:"openrouter/free",
   groq:"openai/gpt-oss-120b",
-  mistral:"mistral-small-latest",
+  gemma:"google/gemma-4-26b-a4b-it:free",
   cohere:"command-a-plus-05-2026",
-  huggingface:"deepseek-ai/DeepSeek-V3-0324:featherless-ai"
+  nemotron:"nvidia/nemotron-3-ultra-550b-a55b:free"
 };
 var STORAGE_KEY = "pfd_settings_v1";
 var RUN_STORAGE_KEY = "pfd_run_v1";
@@ -377,7 +378,11 @@ function slugify(q){
   return (s || "forecast").slice(0, 50);
 }
 function panelFor(host){ return PROVIDERS.filter(function(p){ return p !== host; }); }
-function getModel(provider){ return (settings.models && settings.models[provider]) || DEFAULT_MODELS[provider]; }
+function isRouterSeat(provider){ return provider === "gemma" || provider === "nemotron"; }
+function isProviderEnabled(provider){ return provider !== "nemotron" || settings.nemotronEnabled; }
+function providerKey(provider){ return isProviderEnabled(provider) ? settings.keys[isRouterSeat(provider) ? "openrouter" : provider] : ""; }
+function getModel(provider){
+  if (isRouterSeat(provider)) return DEFAULT_MODELS[provider]; return (settings.models && settings.models[provider]) || DEFAULT_MODELS[provider]; }
 function toast(msg, isError){
   var t = document.createElement("div");
   t.className = "toast" + (isError ? " error" : "");
@@ -395,6 +400,7 @@ window.addEventListener("unhandledrejection", function(e){
 function defaultSettings(){
   return {
     host:"openrouter",
+    nemotronEnabled:false,
     keys:{openrouter:"",groq:"",mistral:"",cohere:"",huggingface:""},
     models:{openrouter:"",groq:"",mistral:"",cohere:"",huggingface:""},
     github:{pat:"",owner:"",repo:"",branch:"main"}
@@ -406,9 +412,10 @@ function loadSettings(){
     if (!raw) return defaultSettings();
     var parsed = JSON.parse(raw);
     var d = defaultSettings();
-    var host = PROVIDERS.indexOf(parsed.host) !== -1 ? parsed.host : d.host;
+    var host = HOST_PROVIDERS.indexOf(parsed.host) !== -1 ? parsed.host : d.host;
     return {
       host: host,
+      nemotronEnabled: parsed.nemotronEnabled === true,
       keys: Object.assign({}, d.keys, parsed.keys || {}),
       models: Object.assign({}, d.models, parsed.models || {}),
       github: Object.assign({}, d.github, parsed.github || {})
@@ -538,17 +545,6 @@ async function callGroq(prompt, apiKey, model){
   var text = message.content || "";
   return {text:text};
 }
-async function callMistral(prompt, apiKey, model){
-  var res = await fetchWithRetry("https://api.mistral.ai/v1/chat/completions", {
-    method:"POST",
-    headers:{"content-type":"application/json","Authorization":"Bearer " + apiKey},
-    body: JSON.stringify({model: model, messages:[{role:"user", content: prompt}]})
-  });
-  if (!res.ok){ throw new Error("Mistral " + res.status + ": " + await safeText(res)); }
-  var data = await res.json();
-  var text = (data.choices && data.choices[0] && data.choices[0].message && data.choices[0].message.content) || "";
-  return {text:text};
-}
 async function callCohere(prompt, apiKey, model){
   var res = await fetchWithRetry("https://api.cohere.com/v2/chat", {
     method:"POST",
@@ -561,25 +557,12 @@ async function callCohere(prompt, apiKey, model){
   var text = content.filter(function(b){ return b.type === "text"; }).map(function(b){ return b.text; }).join("\n");
   return {text:text};
 }
-async function callHuggingFace(prompt, apiKey, model){
-  var res = await fetchWithRetry("https://router.huggingface.co/v1/chat/completions", {
-    method:"POST",
-    headers:{"content-type":"application/json","Authorization":"Bearer " + apiKey},
-    body: JSON.stringify({model: model, messages:[{role:"user", content: prompt}]})
-  });
-  if (!res.ok){ throw new Error("Hugging Face " + res.status + ": " + await safeText(res)); }
-  var data = await res.json();
-  var text = (data.choices && data.choices[0] && data.choices[0].message && data.choices[0].message.content) || "";
-  return {text:text};
-}
 async function callProviderWithFallback(provider, prompt){
-  var key = settings.keys[provider];
+  var key = providerKey(provider);
   var model = getModel(provider);
-  if (provider === "openrouter") return {result: await callOpenRouter(prompt, key, model), model: model};
+  if (provider === "openrouter" || isRouterSeat(provider)) return {result: await callOpenRouter(prompt, key, model), model: model};
   if (provider === "groq") return {result: await callGroq(prompt, key, model), model: model};
-  if (provider === "mistral") return {result: await callMistral(prompt, key, model), model: model};
   if (provider === "cohere") return {result: await callCohere(prompt, key, model), model: model};
-  if (provider === "huggingface") return {result: await callHuggingFace(prompt, key, model), model: model};
   throw new Error("Unknown provider " + provider);
 }
 
@@ -625,7 +608,7 @@ function ensureAgentState(provider){
 }
 function renderPanelSummary(){
   $("hostLabel").textContent = PROVIDER_LABEL[settings.host];
-  $("panelLabel").textContent = panelFor(settings.host).map(function(p){ return PROVIDER_LABEL[p]; }).join(", ");
+  $("panelLabel").textContent = panelFor(settings.host).filter(isProviderEnabled).map(function(p){ return PROVIDER_LABEL[p]; }).join(", ");
   var hostSelect = $("hostSelect");
   if (hostSelect && hostSelect.value !== settings.host) hostSelect.value = settings.host;
 }
@@ -673,7 +656,7 @@ function renderCard(provider){
   } else if (a.status === "pending"){
     html += '<div class="meta-line">Calling API…</div>';
   } else {
-    html += '<div class="meta-line">' + (settings.keys[provider] ? "Not run yet." : "No API key configured.") + "</div>";
+    html += '<div class="meta-line">' + (!isProviderEnabled(provider) ? "Disabled in Settings." : providerKey(provider) ? "Not run yet." : "No API key configured.") + "</div>";
   }
 
   el.innerHTML = html;
@@ -682,7 +665,7 @@ function activeAgents(){
   return panelFor(settings.host).map(function(p){
     var a = agentState[p];
     return a ? Object.assign({provider:p}, a) : null;
-  }).filter(function(a){ return a && a.status === "success" && a.parsed; });
+  }).filter(function(a){ return a && isProviderEnabled(a.provider) && a.status === "success" && a.parsed; });
 }
 function activeAgentsKey(agents){
   return agents.map(function(a){ return a.provider + ":" + a.parsed.probability; }).sort().join("|") + "@" + settings.host;
@@ -727,7 +710,7 @@ function refreshSynthesisAvailability(){
 /* ---------- run orchestration ---------- */
 async function runAgent(provider){
   var a = ensureAgentState(provider);
-  if (!settings.keys[provider]){
+  if (!providerKey(provider)){
     a.status = "idle"; a.error = ""; renderCard(provider); saveRunState(); return;
   }
   a.status = "pending"; a.error = ""; renderCard(provider);
@@ -752,7 +735,7 @@ async function runAgent(provider){
 }
 async function runAllAgents(){
   $("btnAssemble").disabled = true;
-  var panel = panelFor(settings.host);
+  var panel = panelFor(settings.host).filter(isProviderEnabled);
   await Promise.allSettled(panel.map(function(p){ return runAgent(p); }));
   $("btnAssemble").disabled = false;
 }
@@ -914,7 +897,7 @@ async function saveForecast(){
     createdAt: currentRun.createdAt,
     savedAt: new Date().toISOString(),
     host: settings.host,
-    panel: panelFor(settings.host),
+    panel: panelFor(settings.host).filter(isProviderEnabled),
     agents: agentsRecord,
     stats: stats,
     synthesisPasses: synthesisHistory,
@@ -953,10 +936,13 @@ function renderProviderRows(){
       '<div class="provider-row" data-provider="' + p + '">' +
         '<div class="top"><span class="name">' + esc(PROVIDER_LABEL[p]) + '</span>' +
         '<span><span class="status-dot" data-dot="' + p + '"></span><span class="small" data-status-text="' + p + '">untested</span></span></div>' +
-        '<label>API key</label>' +
-        '<input type="password" data-key="' + p + '" placeholder="' + (p + " api key") + '" value="' + esc(settings.keys[p]) + '">' +
-        '<label>Model' + (p === "openrouter" ? " (any OpenRouter model id)" : p === "huggingface" ? " (any Hugging Face router model id)" : "") + '</label>' +
-        '<input type="text" data-model="' + p + '" placeholder="' + esc(DEFAULT_MODELS[p]) + '" value="' + esc(settings.models[p]) + '">' +
+        (isRouterSeat(p) ?
+          '<p class="hint">Uses your OpenRouter key. Free model: ' + esc(DEFAULT_MODELS[p]) + '</p>' +
+          (p === "nemotron" ? '<label><input type="checkbox" id="nemotronEnabled"' + (settings.nemotronEnabled ? ' checked' : '') + '> Enable NVIDIA for public or anonymized questions</label><p class="hint">NVIDIA asks users to keep personal and confidential information out of its free endpoint. Save Settings before testing.</p>' : '') :
+          '<label>API key</label>' +
+          '<input type="password" data-key="' + p + '" placeholder="' + (p + " api key") + '" value="' + esc(settings.keys[p]) + '">' +
+          '<label>Model</label>' +
+          '<input type="text" data-model="' + p + '" placeholder="' + esc(DEFAULT_MODELS[p]) + '" value="' + esc(settings.models[p]) + '">') +
         '<div class="field-inline"><button type="button" class="secondary" data-test="' + p + '">Test connection</button></div>' +
       '</div>';
   }).join("");
@@ -964,12 +950,12 @@ function renderProviderRows(){
     btn.addEventListener("click", function(){ testConnection(btn.getAttribute("data-test")); });
   });
 }
-function currentKeyInputValue(p){ var el = document.querySelector('[data-key="' + p + '"]'); return el ? el.value : settings.keys[p]; }
+function currentKeyInputValue(p){ if (!isProviderEnabled(p)) return ''; if (isRouterSeat(p)) p = 'openrouter'; var el = document.querySelector('[data-key="' + p + '"]'); return el ? el.value : settings.keys[p]; }
 function currentModelInputValue(p){ var el = document.querySelector('[data-model="' + p + '"]'); return el ? (el.value || DEFAULT_MODELS[p]) : getModel(p); }
 async function checkProviderConnection(provider, key, model){
   if (!key) return {ok:false, message:"no key"};
   try{
-    if (provider === "openrouter"){
+    if (provider === "openrouter" || isRouterSeat(provider)){
       var r5 = await fetchWithRetry("https://openrouter.ai/api/v1/chat/completions", {
         method:"POST", headers:{"content-type":"application/json","Authorization":"Bearer " + key},
         body: JSON.stringify({model:model, messages:[{role:"user", content:"hi"}], max_tokens:8})
@@ -981,24 +967,12 @@ async function checkProviderConnection(provider, key, model){
         body: JSON.stringify({model:model, messages:[{role:"user", content:"hi"}], max_tokens:8})
       }, 2, 15000);
       if (!r6.ok) throw new Error(String(r6.status) + ": " + await safeText(r6));
-    } else if (provider === "mistral"){
-      var r7 = await fetchWithRetry("https://api.mistral.ai/v1/chat/completions", {
-        method:"POST", headers:{"content-type":"application/json","Authorization":"Bearer " + key},
-        body: JSON.stringify({model:model, messages:[{role:"user", content:"hi"}], max_tokens:8})
-      }, 2, 15000);
-      if (!r7.ok) throw new Error(String(r7.status) + ": " + await safeText(r7));
     } else if (provider === "cohere"){
       var r8 = await fetchWithRetry("https://api.cohere.com/v2/chat", {
         method:"POST", headers:{"content-type":"application/json","Authorization":"Bearer " + key},
         body: JSON.stringify({model:model, messages:[{role:"user", content:"hi"}]})
       }, 2, 15000);
       if (!r8.ok) throw new Error(String(r8.status) + ": " + await safeText(r8));
-    } else if (provider === "huggingface"){
-      var r9 = await fetchWithRetry("https://router.huggingface.co/v1/chat/completions", {
-        method:"POST", headers:{"content-type":"application/json","Authorization":"Bearer " + key},
-        body: JSON.stringify({model:model, messages:[{role:"user", content:"hi"}], max_tokens:8})
-      }, 2, 15000);
-      if (!r9.ok) throw new Error(String(r9.status) + ": " + await safeText(r9));
     }
     return {ok:true, message:"connected"};
   } catch(err){
@@ -1020,16 +994,16 @@ async function testConnection(provider){
   txt.textContent = "testing…";
   var key = currentKeyInputValue(provider);
   var model = currentModelInputValue(provider);
-  var result = await sharedConnectionCheck(provider, key, model);
+  var result = isProviderEnabled(provider) ? await sharedConnectionCheck(provider, key, model) : {ok:false, message:"disabled"};
   dot.className = "status-dot " + (result.ok ? "ok" : "fail");
-  txt.textContent = result.ok ? "connected" : (key ? result.message : "no key entered");
+  txt.textContent = result.ok ? "connected" : (!isProviderEnabled(provider) || key ? result.message : "no key entered");
   return result;
 }
 async function refreshHomeStatus(provider){
   var dot = document.querySelector('[data-home-dot="' + provider + '"]');
   var txt = document.querySelector('[data-home-text="' + provider + '"]');
   if (!dot || !txt) return;
-  var key = settings.keys[provider];
+  var key = providerKey(provider);
   if (!key){ dot.className = "status-dot"; txt.textContent = "no key"; return; }
   dot.className = "status-dot testing"; txt.textContent = "checking…";
   var result = await sharedConnectionCheck(provider, key, getModel(provider));
@@ -1049,7 +1023,7 @@ function renderHomeStatusStrip(){
     return '<div class="provider-status-chip">' +
       '<span class="status-dot" data-home-dot="' + p + '"></span>' +
       '<span>' + esc(PROVIDER_LABEL[p]) + '</span>' +
-      '<span class="small" data-home-text="' + p + '">' + (settings.keys[p] ? "key saved" : "no key") + '</span>' +
+      '<span class="small" data-home-text="' + p + '">' + (!isProviderEnabled(p) ? "disabled" : providerKey(p) ? "key saved" : "no key") + '</span>' +
     '</div>';
   }).join("");
 }
@@ -1059,7 +1033,7 @@ async function checkAllHomeStatus(){
   button.disabled = true;
   button.textContent = "Checking providers…";
   try {
-    await Promise.allSettled(PROVIDERS.filter(function(p){ return settings.keys[p]; }).map(refreshHomeStatus));
+    await Promise.allSettled(PROVIDERS.filter(function(p){ return providerKey(p); }).map(refreshHomeStatus));
   } finally {
     button.disabled = false;
     button.textContent = "Check provider status";
@@ -1091,7 +1065,8 @@ function openSettingsModal(){
 }
 function closeSettingsModal(){ $("settingsModal").hidden = true; }
 function persistSettingsFromModal(){
-  PROVIDERS.forEach(function(p){
+  settings.nemotronEnabled = $("nemotronEnabled").checked;
+  HOST_PROVIDERS.forEach(function(p){
     settings.keys[p] = document.querySelector('[data-key="' + p + '"]').value.trim();
     settings.models[p] = document.querySelector('[data-model="' + p + '"]').value.trim();
   });
