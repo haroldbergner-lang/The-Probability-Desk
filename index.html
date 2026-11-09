@@ -134,7 +134,7 @@
   .dot-groq{fill:#e11d48;}
   .dot-qwen{fill:#ca8a04;}
   .dot-cohere{fill:#059669;}
-  .dot-nemotron{fill:#f59e0b;}
+  .dot-oss20{fill:#f59e0b;}
   .synthesis-result{border:1px solid var(--brand-dim);background:var(--brand-tint);padding:14px;border-radius:10px;margin-top:12px;}
   .synthesis-result h3{margin:0 0 8px;color:var(--brand);font-size:13.5px;}
   .synthesis-verdict{margin-top:10px;font-size:14px;color:var(--text);}
@@ -275,7 +275,7 @@
 "use strict";
 
 /* ---------- constants ---------- */
-var PROVIDERS = ["openrouter","groq","qwen","cohere","nemotron"];
+var PROVIDERS = ["openrouter","groq","qwen","cohere","oss20"];
 var HOST_PROVIDERS = ["openrouter","groq","cohere"];
 var PROVIDER_LABEL = {
   openrouter:"OpenRouter",
@@ -285,15 +285,16 @@ var PROVIDER_LABEL = {
   qwen:"Qwen 3.8 (Groq)",
   cohere:"Cohere",
   huggingface:"Hugging Face",
-  nemotron:"NVIDIA Nemotron 3 Ultra"
+  nemotron:"NVIDIA Nemotron 3 Ultra",
+  oss20:"GPT-OSS 20B (Groq)"
 };
-var PROVIDER_SHORT = {openrouter:"OR", groq:"GQ", qwen:"QW", cohere:"CO", nemotron:"NV"};
+var PROVIDER_SHORT = {openrouter:"OR", groq:"GQ", qwen:"QW", cohere:"CO", oss20:"O20"};
 var DEFAULT_MODELS = {
   openrouter:"openrouter/free",
   groq:"openai/gpt-oss-120b",
   qwen:"qwen/qwen3.8-27b",
   cohere:"command-a-plus-05-2026",
-  nemotron:"nvidia/nemotron-3-ultra-550b-a55b:free"
+  oss20:"openai/gpt-oss-20b"
 };
 var STORAGE_KEY = "pfd_settings_v1";
 var RUN_STORAGE_KEY = "pfd_run_v1";
@@ -365,8 +366,7 @@ function describeError(provider, err){
   }
   var m = err && err.message ? err.message : String(err);
   if (/(?:^|\s)429:/.test(m)){
-    if (provider === "qwen") return "Groq rate limit (429) for Qwen. Check your Groq usage limits and try again later.";
-    if (isRouterSeat(provider)) return "OpenRouter rate limit (429). The free model may be busy, or your shared OpenRouter quota may be reached. Try again later.";
+    if (isGroqSeat(provider)) return "Groq rate limit (429) for " + PROVIDER_LABEL[provider] + ". Check your Groq usage limits and try again later.";
     return "Rate limit or quota reached (429). Wait before retrying; if it persists, check your " + PROVIDER_LABEL[provider] + " account limits and plan.";
   }
   if (/(?:^|\s)402:/.test(m)){
@@ -381,12 +381,13 @@ function slugify(q){
   return (s || "forecast").slice(0, 50);
 }
 function panelFor(host){ return PROVIDERS.filter(function(p){ return p !== host; }); }
-function isRouterSeat(provider){ return provider === "nemotron"; }
-function isProviderEnabled(provider){ if (provider === "qwen") return getModel("groq") !== DEFAULT_MODELS.qwen;
-  return provider !== "nemotron" || settings.nemotronEnabled; }
-function providerKey(provider){ return isProviderEnabled(provider) ? settings.keys[isRouterSeat(provider) ? "openrouter" : provider === "qwen" ? "groq" : provider] : ""; }
+function isGroqSeat(provider){ return provider === "qwen" || provider === "oss20"; }
+function isProviderEnabled(provider){ return !isGroqSeat(provider) || getModel("groq") !== DEFAULT_MODELS[provider]; }
+function providerKey(provider){ return isProviderEnabled(provider) ? settings.keys[isGroqSeat(provider) ? "groq" : provider] : ""; }
 function getModel(provider){
-  if (isRouterSeat(provider) || provider === "qwen") return DEFAULT_MODELS[provider]; return (settings.models && settings.models[provider]) || DEFAULT_MODELS[provider]; }
+  if (isGroqSeat(provider)) return DEFAULT_MODELS[provider];
+  return (settings.models && settings.models[provider]) || DEFAULT_MODELS[provider];
+}
 function toast(msg, isError){
   var t = document.createElement("div");
   t.className = "toast" + (isError ? " error" : "");
@@ -404,7 +405,6 @@ window.addEventListener("unhandledrejection", function(e){
 function defaultSettings(){
   return {
     host:"openrouter",
-    nemotronEnabled:false,
     keys:{openrouter:"",groq:"",mistral:"",cohere:"",huggingface:""},
     models:{openrouter:"",groq:"",mistral:"",cohere:"",huggingface:""},
     github:{pat:"",owner:"",repo:"",branch:"main"}
@@ -419,7 +419,6 @@ function loadSettings(){
     var host = HOST_PROVIDERS.indexOf(parsed.host) !== -1 ? parsed.host : d.host;
     return {
       host: host,
-      nemotronEnabled: parsed.nemotronEnabled === true,
       keys: Object.assign({}, d.keys, parsed.keys || {}),
       models: Object.assign({}, d.models, parsed.models || {}),
       github: Object.assign({}, d.github, parsed.github || {})
@@ -570,11 +569,11 @@ async function callCohere(prompt, apiKey, model){
 async function callProviderWithFallback(provider, prompt){
   var key = providerKey(provider);
   var model = getModel(provider);
-  if (provider === "openrouter" || isRouterSeat(provider)) {
+  if (provider === "openrouter") {
     var result = await callOpenRouter(prompt, key, model, provider);
     return {result:result, model:result.model};
   }
-  if (provider === "groq" || provider === "qwen") return {result: await callGroq(prompt, key, model), model: model};
+  if (provider === "groq" || isGroqSeat(provider)) return {result: await callGroq(prompt, key, model), model: model};
   if (provider === "cohere") return {result: await callCohere(prompt, key, model), model: model};
   throw new Error("Unknown provider " + provider);
 }
@@ -949,9 +948,8 @@ function renderProviderRows(){
       '<div class="provider-row" data-provider="' + p + '">' +
         '<div class="top"><span class="name">' + esc(PROVIDER_LABEL[p]) + '</span>' +
         '<span><span class="status-dot" data-dot="' + p + '"></span><span class="small" data-status-text="' + p + '">untested</span></span></div>' +
-        ((isRouterSeat(p) || p === "qwen") ?
-          '<p class="hint">Uses your ' + (p === "qwen" ? "Groq" : "OpenRouter") + ' key. Model: ' + esc(DEFAULT_MODELS[p]) + '</p>' +
-          (p === "nemotron" ? '<label><input type="checkbox" id="nemotronEnabled"' + (settings.nemotronEnabled ? ' checked' : '') + '> Enable NVIDIA for public or anonymized questions</label><p class="hint">NVIDIA asks users to keep personal and confidential information out of its free endpoint. Save Settings before testing.</p>' : '') :
+        (isGroqSeat(p) ?
+          '<p class="hint">Uses your Groq key. Model: ' + esc(DEFAULT_MODELS[p]) + '</p>' :
           '<label>API key</label>' +
           '<input type="password" data-key="' + p + '" placeholder="' + (p + " api key") + '" value="' + esc(settings.keys[p]) + '">' +
           '<label>Model</label>' +
@@ -963,18 +961,18 @@ function renderProviderRows(){
     btn.addEventListener("click", function(){ testConnection(btn.getAttribute("data-test")); });
   });
 }
-function currentKeyInputValue(p){ if (!isProviderEnabled(p)) return ''; if (isRouterSeat(p)) p = 'openrouter'; else if (p === 'qwen') p = 'groq'; var el = document.querySelector('[data-key="' + p + '"]'); return el ? el.value : settings.keys[p]; }
+function currentKeyInputValue(p){ if (!isProviderEnabled(p)) return ''; if (isGroqSeat(p)) p = 'groq'; var el = document.querySelector('[data-key="' + p + '"]'); return el ? el.value : settings.keys[p]; }
 function currentModelInputValue(p){ var el = document.querySelector('[data-model="' + p + '"]'); return el ? (el.value || DEFAULT_MODELS[p]) : getModel(p); }
 async function checkProviderConnection(provider, key, model){
   if (!key) return {ok:false, message:"no key"};
   try{
-    if (provider === "openrouter" || isRouterSeat(provider)){
+    if (provider === "openrouter"){
       var r5 = await fetchWithRetry("https://openrouter.ai/api/v1/chat/completions", {
         method:"POST", headers:{"content-type":"application/json","Authorization":"Bearer " + key},
         body: openRouterBody(provider, model, "hi", 8)
       }, 2, 15000);
       if (!r5.ok) throw new Error(String(r5.status) + ": " + await safeText(r5));
-    } else if (provider === "groq" || provider === "qwen"){
+    } else if (provider === "groq" || isGroqSeat(provider)){
       var r6 = await fetchWithRetry("https://api.groq.com/openai/v1/chat/completions", {
         method:"POST", headers:{"content-type":"application/json","Authorization":"Bearer " + key},
         body: JSON.stringify({model:model, messages:[{role:"user", content:"hi"}], max_tokens:8})
@@ -1078,7 +1076,6 @@ function openSettingsModal(){
 }
 function closeSettingsModal(){ $("settingsModal").hidden = true; }
 function persistSettingsFromModal(){
-  settings.nemotronEnabled = $("nemotronEnabled").checked;
   HOST_PROVIDERS.forEach(function(p){
     settings.keys[p] = document.querySelector('[data-key="' + p + '"]').value.trim();
     settings.models[p] = document.querySelector('[data-model="' + p + '"]').value.trim();
