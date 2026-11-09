@@ -75,6 +75,8 @@
   .intro{color:var(--text-dim);font-size:13.5px;margin:2px 0 18px;max-width:760px;}
   .provider-status-row{display:flex;gap:8px;flex-wrap:wrap;margin:0 0 18px;}
   .provider-status-chip{display:flex;align-items:center;gap:6px;background:#fff;border:1px solid var(--border);border-radius:20px;padding:6px 12px;font-size:12px;color:var(--text-dim);box-shadow:0 1px 2px rgba(16,24,40,0.04);}
+  .provider-status-chip{max-width:100%;flex-wrap:wrap;}
+  .provider-status-chip .small{overflow-wrap:anywhere;}
   .provider-status-chip > span:nth-child(2){color:var(--text);font-weight:600;}
   .card{
     background:var(--panel);border:1px solid var(--border);
@@ -335,14 +337,18 @@ async function fetchWithTimeout(url, options, timeoutMs){
     clearTimeout(timer);
   }
 }
-async function fetchWithRetry(url, options, maxRetries){
+async function fetchWithRetry(url, options, maxRetries, timeoutMs){
   maxRetries = maxRetries === undefined ? 2 : maxRetries;
   var attempt = 0;
   for (;;){
-    var res = await fetch(url, options);
+    var res = await fetchWithTimeout(url, options, timeoutMs || 60000);
     if (res.status !== 429 || attempt >= maxRetries) return res;
-    var retryAfter = Number(res.headers.get("retry-after"));
-    var waitMs = retryAfter > 0 ? retryAfter * 1000 : Math.pow(2, attempt) * 1000;
+    var retryHeader = res.headers.get("retry-after");
+    var retryAfter = Number(retryHeader);
+    var waitMs = retryAfter > 0 ? retryAfter * 1000 : Math.max(0, Date.parse(retryHeader) - Date.now());
+    if (!isFinite(waitMs) || waitMs <= 0) waitMs = Math.pow(2, attempt) * 1000;
+    // Do not retry earlier than requested or leave the interface waiting indefinitely.
+    if (waitMs > 15000) return res;
     await sleep(waitMs);
     attempt++;
   }
@@ -356,9 +362,14 @@ function describeError(provider, err){
     return PROVIDER_LABEL[provider] + " request was blocked before it reached the server — almost certainly a browser CORS/preflight rejection, not an API error.";
   }
   var m = err && err.message ? err.message : String(err);
-  if (/ 429:/.test(m)){
-    return PROVIDER_LABEL[provider] + " is still rate-limited after retrying — " + m;
+  if (/(?:^|\s)429:/.test(m)){
+    return "Rate limit or quota reached (429). Wait before retrying; if it persists, check your " + PROVIDER_LABEL[provider] + " account limits and plan.";
   }
+  if (/(?:^|\s)402:/.test(m)){
+    return "Payment required (402). Check your " + PROVIDER_LABEL[provider] + " credits and billing, or remove its key in Settings to skip it.";
+  }
+  if (/(?:^|\s)401:/.test(m)) return "API key rejected (401). Update the " + PROVIDER_LABEL[provider] + " key in Settings.";
+  if (/(?:^|\s)403:/.test(m)) return "Access denied (403). Check the key permissions and model access in " + PROVIDER_LABEL[provider] + ".";
   return m;
 }
 function slugify(q){
@@ -959,40 +970,48 @@ async function checkProviderConnection(provider, key, model){
   if (!key) return {ok:false, message:"no key"};
   try{
     if (provider === "openrouter"){
-      var r5 = await fetchWithTimeout("https://openrouter.ai/api/v1/chat/completions", {
+      var r5 = await fetchWithRetry("https://openrouter.ai/api/v1/chat/completions", {
         method:"POST", headers:{"content-type":"application/json","Authorization":"Bearer " + key},
         body: JSON.stringify({model:model, messages:[{role:"user", content:"hi"}], max_tokens:8})
-      }, 15000);
+      }, 2, 15000);
       if (!r5.ok) throw new Error(String(r5.status) + ": " + await safeText(r5));
     } else if (provider === "groq"){
-      var r6 = await fetchWithTimeout("https://api.groq.com/openai/v1/chat/completions", {
+      var r6 = await fetchWithRetry("https://api.groq.com/openai/v1/chat/completions", {
         method:"POST", headers:{"content-type":"application/json","Authorization":"Bearer " + key},
         body: JSON.stringify({model:model, messages:[{role:"user", content:"hi"}], max_tokens:8})
-      }, 15000);
+      }, 2, 15000);
       if (!r6.ok) throw new Error(String(r6.status) + ": " + await safeText(r6));
     } else if (provider === "mistral"){
-      var r7 = await fetchWithTimeout("https://api.mistral.ai/v1/chat/completions", {
+      var r7 = await fetchWithRetry("https://api.mistral.ai/v1/chat/completions", {
         method:"POST", headers:{"content-type":"application/json","Authorization":"Bearer " + key},
         body: JSON.stringify({model:model, messages:[{role:"user", content:"hi"}], max_tokens:8})
-      }, 15000);
+      }, 2, 15000);
       if (!r7.ok) throw new Error(String(r7.status) + ": " + await safeText(r7));
     } else if (provider === "cohere"){
-      var r8 = await fetchWithTimeout("https://api.cohere.com/v2/chat", {
+      var r8 = await fetchWithRetry("https://api.cohere.com/v2/chat", {
         method:"POST", headers:{"content-type":"application/json","Authorization":"Bearer " + key},
         body: JSON.stringify({model:model, messages:[{role:"user", content:"hi"}]})
-      }, 15000);
+      }, 2, 15000);
       if (!r8.ok) throw new Error(String(r8.status) + ": " + await safeText(r8));
     } else if (provider === "huggingface"){
-      var r9 = await fetchWithTimeout("https://router.huggingface.co/v1/chat/completions", {
+      var r9 = await fetchWithRetry("https://router.huggingface.co/v1/chat/completions", {
         method:"POST", headers:{"content-type":"application/json","Authorization":"Bearer " + key},
         body: JSON.stringify({model:model, messages:[{role:"user", content:"hi"}], max_tokens:8})
-      }, 15000);
+      }, 2, 15000);
       if (!r9.ok) throw new Error(String(r9.status) + ": " + await safeText(r9));
     }
     return {ok:true, message:"connected"};
   } catch(err){
-    return {ok:false, message: isLikelyCORS(err) ? "blocked (CORS?)" : "failed: " + (err.message || err).toString()};
+    return {ok:false, message:describeError(provider, err)};
   }
+}
+var connectionChecks = {};
+async function sharedConnectionCheck(provider, key, model){
+  if (connectionChecks[provider]) return connectionChecks[provider];
+  var request = checkProviderConnection(provider, key, model);
+  connectionChecks[provider] = request;
+  try { return await request; }
+  finally { if (connectionChecks[provider] === request) delete connectionChecks[provider]; }
 }
 async function testConnection(provider){
   var dot = document.querySelector('[data-dot="' + provider + '"]');
@@ -1001,7 +1020,7 @@ async function testConnection(provider){
   txt.textContent = "testing…";
   var key = currentKeyInputValue(provider);
   var model = currentModelInputValue(provider);
-  var result = await checkProviderConnection(provider, key, model);
+  var result = await sharedConnectionCheck(provider, key, model);
   dot.className = "status-dot " + (result.ok ? "ok" : "fail");
   txt.textContent = result.ok ? "connected" : (key ? result.message : "no key entered");
   return result;
@@ -1013,9 +1032,9 @@ async function refreshHomeStatus(provider){
   var key = settings.keys[provider];
   if (!key){ dot.className = "status-dot"; txt.textContent = "no key"; return; }
   dot.className = "status-dot testing"; txt.textContent = "checking…";
-  var result = await checkProviderConnection(provider, key, getModel(provider));
+  var result = await sharedConnectionCheck(provider, key, getModel(provider));
   dot.className = "status-dot " + (result.ok ? "ok" : "fail");
-  txt.textContent = result.ok ? "connected" : truncate(result.message, 24);
+  txt.textContent = result.ok ? "connected" : result.message;
   txt.title = result.ok ? "" : result.message + " (click to view full error)";
   txt.style.cursor = result.ok ? "" : "pointer";
   txt.onclick = result.ok ? null : function(){
@@ -1034,10 +1053,17 @@ function renderHomeStatusStrip(){
     '</div>';
   }).join("");
 }
-function checkAllHomeStatus(){
-  PROVIDERS.forEach(function(p){
-    if (settings.keys[p]) refreshHomeStatus(p).catch(function(e){ console.error(e); });
-  });
+async function checkAllHomeStatus(){
+  var button = $("btnCheckStatus");
+  if (button.disabled) return;
+  button.disabled = true;
+  button.textContent = "Checking providers…";
+  try {
+    await Promise.allSettled(PROVIDERS.filter(function(p){ return settings.keys[p]; }).map(refreshHomeStatus));
+  } finally {
+    button.disabled = false;
+    button.textContent = "Check provider status";
+  }
 }
 async function testGithub(){
   var pat = $("sGhPat").value, owner = $("sGhOwner").value, repo = $("sGhRepo").value;
